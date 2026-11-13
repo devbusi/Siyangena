@@ -33,15 +33,37 @@ The promoter decides the rules per event: supply, price, tickets per fan, resale
 
 Payments settle in RLUSD on Testnet (or XRP on Devnet). The app shows rands only, and the blockchain stays invisible to fans.
 
+## Accounts and roles
+
+Sign-up and sign-in use Supabase (email and password). Everyone gets a role:
+
+| Role | Can |
+| --- | --- |
+| Fan | Every new account. Verify once, buy tickets, add an agent with limits, resell at the promoter's cap, top up test money |
+| Promoter | Apply as a registered business or an independent promoter. Once an admin approves, create events and run them: open and close sales, set tickets per fan, the resale cap and the fee, watch the live feed |
+| Admin | Review promoter applications (approve, ask for more, don't approve) and change anyone's role |
+
+Every account gets its own ticket wallet, created and funded by the server on Testnet the first time they sign in. The seed is encrypted with `WALLET_ENCRYPTION_KEY` before it is stored, and fans never see it. Buying directly needs no agent: the server pays from the fan's wallet. The agent is an add-on that the backend starts for one fan and one event, with that wallet only.
+
+Each event is its own ticket issuance on the ledger, created by the platform wallet on behalf of the promoter, so tickets from different events never mix.
+
 ## Repo layout
 
 ```
+supabase/  SQL for accounts, roles, promoter applications, events and wallets
 shared/    types, network config and memo format shared by everything
 backend/   Express API, promoter wallet, XRPL logic, live event stream (SSE)
 agent/     the fan's agent: MCP server with 9 tools, AI runner, Batch signer
 web/       React app for fans and promoters
 scripts/   setup (wallets, allowances, ticket issuance) and the scripted demo
 ```
+
+## Set up Supabase (once)
+
+1. In the Supabase SQL editor, run `supabase/migrations/001_accounts_roles_events.sql`.
+2. Authentication > Sign In / Providers > Email: turn off "Confirm email" while testing.
+3. Sign up in the app, then make yourself an admin in the SQL editor:
+   `update public.profiles set role = 'admin' where email = 'you@example.com';`
 
 ## Run it
 
@@ -54,7 +76,7 @@ npm run dev       # backend on http://localhost:4000
 npm run web       # app on http://localhost:5173
 ```
 
-Set `HUMAN_API_KEY` in `.env` and the same value as `VITE_HUMAN_API_KEY` in `web/.env` so the app can save limits and promoter rules. Agents never get this key.
+Fill in `.env` (backend) and `web/.env` (app) from the two `.env.example` files. The backend needs `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (the secret key) and `WALLET_ENCRYPTION_KEY`. The app needs `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` and `VITE_API_URL`. Without Supabase the backend still runs the scripted demo from `data.json`.
 
 Add `ANTHROPIC_API_KEY` to `.env` to run the agent with the AI model. Without it, the agent falls back to a simple policy so the demo still works.
 
@@ -72,9 +94,22 @@ Or run all four demo moments end to end, with explorer links printed at the end:
 npm run demo
 ```
 
+## Deploy
+
+- **Backend on Render:** New > Blueprint, pick this repo (it reads `render.yaml`). Fill in `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `WALLET_ENCRYPTION_KEY`, `PROMOTER_SEED`, `BANK_SEED` (from your local `.env` after `npm run setup`), `CORS_ORIGIN` (your Vercel URL) and `ANTHROPIC_API_KEY`.
+- **App on Vercel:** import the repo with the root directory left as the repo root (it reads `vercel.json`). Add `VITE_API_URL` (your Render URL plus `/api`), `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` and `VITE_XRPL_NETWORK`.
+
+## Test it with real people
+
+1. Sign up as a promoter, fill in the application.
+2. As an admin, open Promoter review and approve it.
+3. As the promoter, create an event and open sales.
+4. Sign up as a fan, verify, add test money in Wallet, buy tickets.
+5. A second fan adds an agent with limits. A fan who can't go resells, and the other buys it.
+
 ### Preview without a ledger
 
-`VITE_MOCK=1 npm run dev -w web` runs the whole app on simulated data, including the agent feed, resale and the bad-actor buttons in the promoter control room.
+`VITE_MOCK=1 npm run dev -w web` runs the whole app on simulated data. A bar at the top switches between a fan, a promoter and an admin.
 
 ## The demo moments
 

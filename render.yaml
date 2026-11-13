@@ -1,0 +1,35 @@
+# Render blueprint for the Siyangena backend (and the agents it starts).
+# New > Blueprint, pick this repo, then fill in the secret values when Render asks.
+services:
+  - type: web
+    name: siyangena-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm run start -w backend
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: XRPL_NETWORK
+        value: testnet
+      - key: HUMAN_API_KEY
+        generateValue: true
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: WALLET_ENCRYPTION_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: PROMOTER_SEED
+        sync: false
+      - key: BANK_SEED
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: AGENT_MODEL
+        value: claude-sonnet-5-5
+      - key: DEMO_CAST
+        value: "off"
