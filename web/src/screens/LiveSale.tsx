@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import type { FanWallet, Mandate } from "@drop/shared";
 import { Button, Coin, Enter, FeedRow, Ticket, TopBar } from "../components/ui";
 import { api } from "../lib/api";
@@ -35,7 +35,7 @@ function statusFrom(type: string | undefined, tool: string | undefined, n: numbe
     case "resale.sign_requested":
       return { title: "Swapping now", sub: "Ticket and money move together", busy: true };
     default:
-      return { title: "Ready for the sale", sub: "Arm your agent and get on with your day", busy: false };
+      return { title: "Ready for the sale", sub: "Send your agent in and get on with your day", busy: false };
   }
 }
 
@@ -50,6 +50,7 @@ export function LiveSale() {
   const [wallet, setWallet] = useState<FanWallet | null>(null);
   const [mandate, setMandate] = useState<Mandate | null>(null);
   const [armed, setArmed] = useState(false);
+  const starting = useRef(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -63,14 +64,20 @@ export function LiveSale() {
     [events, fanId, id],
   );
   const last = mine[mine.length - 1];
-  const allowance = Number(wallet?.allowanceZar ?? 0);
+  const inWallet = Number(wallet?.allowanceZar ?? 0);
   const cap = mandate ? mandate.quantity * Number(mandate.ceilingZar) : 0;
+  const left = mandate ? Math.max(0, mandate.quantity - mandate.bought) * Number(mandate.ceilingZar) : 0;
+  // The agent spends from your wallet, never more than its limit and never more than you hold.
+  const canSpend = mandate ? Math.min(inWallet, left) : 0;
+  const short = Boolean(mandate) && wallet !== null && inWallet < left;
   const status = statusFrom(last?.type, last?.tool, mandate?.quantity ?? 0);
   const tickets = wallet?.tickets ?? 0;
 
   const soldOut = drop?.state === "sold_out";
 
   async function findResale() {
+    if (starting.current) return;
+    starting.current = true;
     setError("");
     try {
       setArmed(true);
@@ -78,10 +85,14 @@ export function LiveSale() {
     } catch (e) {
       setArmed(false);
       setError(e instanceof Error ? e.message : "Couldn't start your agent");
+    } finally {
+      starting.current = false;
     }
   }
 
   async function arm() {
+    if (starting.current) return; // a double click starts one agent, not two
+    starting.current = true;
     setError("");
     try {
       setArmed(true);
@@ -89,6 +100,8 @@ export function LiveSale() {
     } catch (e) {
       setArmed(false);
       setError(e instanceof Error ? e.message : "Couldn't start your agent");
+    } finally {
+      starting.current = false;
     }
   }
 
@@ -130,18 +143,27 @@ export function LiveSale() {
         <Enter delay={0.06}>
           <div className="panel stack" style={{ gap: 10 }}>
             <div className="row">
-              <span className="muted">Agent can still spend</span>
+              <span className="muted">Your agent can spend</span>
               <strong className="num">
-                {rand(allowance)} {cap ? <span className="faint">of {rand(cap)}</span> : null}
+                {rand(canSpend)} {cap ? <span className="faint">of its {rand(cap)} limit</span> : null}
               </strong>
             </div>
             <div className="meter" aria-hidden="true">
               <motion.div
                 initial={false}
-                animate={{ width: `${cap ? Math.max(0, Math.min(100, (allowance / cap) * 100)) : 100}%` }}
+                animate={{ width: `${cap ? Math.max(0, Math.min(100, (canSpend / cap) * 100)) : 0}%` }}
                 transition={{ type: "spring", stiffness: 160, damping: 22 }}
               />
             </div>
+            <div className="row">
+              <span className="muted">In your wallet</span>
+              <strong className="num">{wallet ? rand(inWallet) : "R…"}</strong>
+            </div>
+            {short && (
+              <p style={{ fontWeight: 700 }}>
+                Your wallet holds less than your agent's limit. <Link to="/wallet">Top up</Link> so it can use all of it.
+              </p>
+            )}
             {mandate && (
               <p className="faint">
                 Limit: {mandate.quantity} tickets at up to {rand(mandate.ceilingZar)} each. Only you can change it.
@@ -166,7 +188,7 @@ export function LiveSale() {
 
         <h2 style={{ margin: "22px 0 4px", fontSize: "1.2rem" }}>What your agent did</h2>
         {mine.length === 0 ? (
-          <p className="muted">Nothing yet. Arm your agent and it will act the moment tickets go on sale.</p>
+          <p className="muted">Nothing yet. Send your agent in and it buys the moment tickets go on sale.</p>
         ) : (
           <ul className="feed">
             <AnimatePresence initial={false}>
@@ -196,7 +218,7 @@ export function LiveSale() {
             </Button>
           ) : (
             <Button block disabled={armed || !mandate} onClick={arm}>
-              {!mandate ? "Set your limits first" : armed ? "Your agent is armed" : "Arm my agent"}
+              {!mandate ? "Set your limits first" : armed ? "Your agent is in the queue" : "Send my agent in"}
             </Button>
           )}
         </div>
