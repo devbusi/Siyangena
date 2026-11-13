@@ -35,7 +35,7 @@ export function Discover() {
       to: "/event",
     },
     { scene: "braamfontein", city: "Johannesburg", name: "Braam Rooftop Sessions", when: "Fri 18 Dec", price: "R250", pill: "Opens Friday", tone: "pill-quiet" },
-    { scene: "floridaroad", city: "Durban", name: "Florida Road Block Party", when: "Sat 19 Dec", price: "R180", pill: "Opens Monday", tone: "pill-quiet" },
+    { scene: "floridaroad", city: "Durban", name: "Florida Road Sundowner", when: "Sat 19 Dec", price: "R180", pill: "Opens Monday", tone: "pill-quiet" },
   ];
   const shown = cards.filter((c) => city === "All" || c.city === city);
 
