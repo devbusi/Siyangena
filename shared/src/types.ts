@@ -81,6 +81,7 @@ export interface CreateDropRequest {
 export interface UpdateDropRequest {
   resaleCapZar?: number;
   resaleFeePct?: number;
+  maxPerFan?: number;
 }
 
 export interface PromoterStats {

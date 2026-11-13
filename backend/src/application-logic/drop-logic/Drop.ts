@@ -119,8 +119,10 @@ export class Drop {
     return this.toView(drop);
   }
 
-  updateDrop(params: { resaleCapZar?: number; resaleFeePct?: number }): DropView {
+  // The promoter decides the resale cap, the fee and how many tickets one fan may hold.
+  updateDrop(params: { resaleCapZar?: number; resaleFeePct?: number; maxPerFan?: number }): DropView {
     const drop = this.getRecord();
+    if (params.maxPerFan !== undefined) drop.maxPerFan = params.maxPerFan;
     if (params.resaleCapZar !== undefined) drop.resaleCapZar = params.resaleCapZar;
     if (params.resaleFeePct !== undefined) drop.resaleFeePct = params.resaleFeePct;
     save();

@@ -16,8 +16,9 @@ export const UpdateDropDto = z
   .object({
     resaleCapZar: z.coerce.number().positive().optional(),
     resaleFeePct: z.coerce.number().min(0).max(100).optional(),
+    maxPerFan: z.coerce.number().int().positive().optional(),
   })
-  .refine((v) => v.resaleCapZar !== undefined || v.resaleFeePct !== undefined, {
-    message: "Send resaleCapZar and/or resaleFeePct",
+  .refine((v) => v.resaleCapZar !== undefined || v.resaleFeePct !== undefined || v.maxPerFan !== undefined, {
+    message: "Send resaleCapZar, resaleFeePct and/or maxPerFan",
   });
 export type UpdateDropDto = z.infer<typeof UpdateDropDto>;
