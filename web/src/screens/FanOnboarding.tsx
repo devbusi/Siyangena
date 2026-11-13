@@ -19,8 +19,8 @@ export function Welcome() {
             <Marquee rows={[["Real tickets", "No scalpers", "Siyangena"], ["Your agent", "Your limits", "Fair resale"]]} size={58} />
             <Stickers
               items={[
-                { x: "4%", y: "-18px", size: 84, tilt: -16 },
-                { x: "70%", y: "40%", size: 100, tilt: 18, face: "#56db9c" },
+                { x: "calc(100% - 118px)", y: "calc(100% + 18px)", size: 84, tilt: -16 },
+                { x: "calc(100% - 96px)", y: "calc(100% + 116px)", size: 62, tilt: 18, face: "#56db9c" },
               ]}
             />
           </div>
