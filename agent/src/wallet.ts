@@ -10,6 +10,10 @@ const SEED_ENV: Record<string, string> = {
 };
 
 export function agentWallet(fanId: string): Wallet {
+  // Real accounts: the backend starts this agent with that account's wallet in AGENT_SEED.
+  if (process.env.AGENT_SEED && (!process.env.AGENT_FAN || process.env.AGENT_FAN === fanId)) {
+    return Wallet.fromSeed(process.env.AGENT_SEED);
+  }
   const envName = SEED_ENV[fanId];
   const seed = envName ? process.env[envName] : undefined;
   if (!seed) throw new Error(`No agent wallet for "${fanId}" (set ${envName ?? "a seed"} in .env, run npm run setup)`);

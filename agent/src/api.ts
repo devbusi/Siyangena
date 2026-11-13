@@ -17,9 +17,17 @@ export type ApiResult<T> = ApiOk<T> | ApiErr;
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<ApiResult<T>> {
   try {
+    const headers: Record<string, string> = {};
+    if (body) headers["Content-Type"] = "application/json";
+    // Started by the backend: act for one fan and one event only.
+    if (process.env.AGENT_API_KEY && process.env.AGENT_FAN) {
+      headers["X-Agent-Key"] = process.env.AGENT_API_KEY;
+      headers["X-Agent-Fan"] = process.env.AGENT_FAN;
+    }
+    if (process.env.AGENT_EVENT_ID) headers["X-Event-Id"] = process.env.AGENT_EVENT_ID;
     const res = await fetch(BASE + path, {
       method,
-      headers: body ? { "Content-Type": "application/json" } : undefined,
+      headers,
       body: body ? JSON.stringify(body) : undefined,
     });
     const json: any = await res.json().catch(() => ({}));
