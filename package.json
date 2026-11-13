@@ -15,6 +15,7 @@
     "typecheck": "npm run typecheck -w shared && npm run typecheck -w backend && npm run typecheck -w agent && npm run typecheck -w web",
     "preflight": "tsx scripts/preflight.ts",
     "setup": "tsx scripts/setup.ts",
+    "bank": "tsx scripts/bank.ts",
     "demo": "tsx scripts/demo.ts",
     "agent": "npm run start -w agent --",
     "mcp": "npm run mcp -w agent",
