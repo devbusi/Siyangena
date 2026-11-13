@@ -3,6 +3,9 @@ import { z } from "zod";
 export const CreateDropDto = z.object({
   name: z.string().trim().min(1),
   venue: z.string().trim().min(1),
+  city: z.string().trim().optional(),
+  scene: z.string().trim().optional(),
+  posterUrl: z.string().trim().url().optional(),
   startsAt: z.string().trim().min(1),
   priceZar: z.coerce.number().positive(),
   supply: z.coerce.number().int().positive(),

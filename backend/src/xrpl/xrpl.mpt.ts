@@ -9,14 +9,14 @@ import { SubmitResult } from "./xrpl.types";
 // only authorised holders can hold them, and holders can only send them back to
 // the promoter (issuer), never to each other. That is what kills off-platform resale.
 
-async function createIssuance(params: { supply: number; name: string; venue: string; startsAt: string }) {
+async function createIssuance(params: { supply: number; name: string; venue: string; startsAt: string; promoterName?: string }) {
   const promoter = xrplWallet.getPromoterWallet();
   const metadata = {
     ticker: "SIYA",
     name: params.name,
     desc: `${params.venue}, ${params.startsAt}`,
     asset_class: "other",
-    issuer_name: "Siyangena",
+    issuer_name: params.promoterName ? `${params.promoterName} on Siyangena` : "Siyangena",
   };
 
   const result = await xrplClient.submitAsPromoter({

@@ -9,14 +9,21 @@ import type {
   Listing,
   Mandate,
 } from "@drop/shared";
+import { db, supabaseConfigured } from "./supabase";
 
-// In-memory state, persisted to backend/data.json (gitignored).
-// This stands in for CropMarket's Postgres/Drizzle layer: enough for a hackathon demo.
+// Working state lives in memory. It is saved as a snapshot to Supabase (app_state table)
+// when Supabase is configured, otherwise to backend/data.json for local demos.
+// Events also get their own rows in the public events table so the app can list them.
 
 export interface DropRecord {
   id: string;
   name: string;
   venue: string;
+  city?: string;
+  scene?: string;
+  posterUrl?: string;
+  promoterId?: string;
+  promoterName?: string;
   startsAt: string;
   state: DropState;
   priceZar: number;
@@ -27,6 +34,7 @@ export interface DropRecord {
   resaleFeePct: number;
   issuanceId: string;
   issuanceTx?: string;
+  createdAt?: string;
 }
 
 export interface FanRecord {
@@ -37,6 +45,7 @@ export interface FanRecord {
 
 export interface IntentRecord {
   requestId: string;
+  eventId: string;
   fanId: string;
   mandateId: string;
   quantity: number;
@@ -49,11 +58,13 @@ export interface IntentRecord {
 }
 
 export interface ListingRecord extends Listing {
+  eventId: string;
   createdAt: string;
 }
 
 export interface BatchRecord {
   batchId: string;
+  eventId: string;
   listingId: string;
   sellerFanId: string;
   buyerFanId: string;
@@ -66,75 +77,191 @@ export interface BatchRecord {
   txHash?: string;
 }
 
+export interface EventStats {
+  revenueRlusd: string;
+  resales: number;
+  feesRlusd: string;
+}
+
 export interface StoreState {
-  drop: DropRecord | null;
+  drops: Record<string, DropRecord>;
   fans: Record<string, FanRecord>;
-  mandates: Record<string, Mandate>; // keyed by fanId
+  mandates: Record<string, Mandate>; // keyed by `${fanId}:${eventId}`
   intents: Record<string, IntentRecord>;
   listings: Record<string, ListingRecord>;
   batches: Record<string, BatchRecord>;
   history: Record<string, LedgerItem[]>; // keyed by fanId
-  stats: { revenueRlusd: string; resales: number; feesRlusd: string };
+  stats: Record<string, EventStats>; // keyed by eventId
   agentLog: AgentLogEntry[];
   events: DropEvent[];
   processedTx: string[];
 }
 
 const DATA_FILE = process.env.DROP_DATA_FILE || path.resolve(__dirname, "../../data.json");
+const STATE_ROW = process.env.APP_STATE_ID || "main";
 
 function emptyState(): StoreState {
   return {
-    drop: null,
+    drops: {},
     fans: {},
     mandates: {},
     intents: {},
     listings: {},
     batches: {},
     history: {},
-    stats: { revenueRlusd: "0", resales: 0, feesRlusd: "0" },
+    stats: {},
     agentLog: [],
     events: [],
     processedTx: [],
   };
 }
 
-function load(): StoreState {
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      const parsed = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
-      const state = { ...emptyState(), ...parsed } as StoreState;
-      // A promoter Sequence lock does not survive a restart, so in-flight Batches are dead.
-      for (const b of Object.values(state.batches)) {
-        if (b.status === "awaiting_signatures") b.status = "expired";
-      }
-      for (const l of Object.values(state.listings)) {
-        if (l.status === "signing") l.status = "open";
-      }
-      return state;
+// Older snapshots held a single `drop`, fan-keyed mandates and one stats object.
+function migrate(parsed: any): StoreState {
+  const next = { ...emptyState(), ...parsed } as StoreState & { drop?: DropRecord };
+  if (parsed.drop && !parsed.drops) {
+    const drop = parsed.drop as DropRecord;
+    next.drops = { [drop.id]: drop };
+    if (parsed.stats && "revenueRlusd" in parsed.stats) next.stats = { [drop.id]: parsed.stats };
+    const mandates: Record<string, Mandate> = {};
+    for (const [fanId, m] of Object.entries(parsed.mandates ?? {})) {
+      const mandate = m as Mandate;
+      mandates[`${fanId}:${drop.id}`] = { ...mandate, eventId: drop.id };
     }
+    next.mandates = mandates;
+    for (const i of Object.values(next.intents)) (i as IntentRecord).eventId ??= drop.id;
+    for (const l of Object.values(next.listings)) (l as ListingRecord).eventId ??= drop.id;
+    for (const b of Object.values(next.batches)) (b as BatchRecord).eventId ??= drop.id;
+  }
+  delete (next as any).drop;
+  // A promoter Sequence lock does not survive a restart, so in-flight Batches are dead.
+  for (const b of Object.values(next.batches)) {
+    if (b.status === "awaiting_signatures") b.status = "expired";
+  }
+  for (const l of Object.values(next.listings)) {
+    if (l.status === "signing") l.status = "open";
+  }
+  return next;
+}
+
+function loadFile(): StoreState {
+  try {
+    if (fs.existsSync(DATA_FILE)) return migrate(JSON.parse(fs.readFileSync(DATA_FILE, "utf8")));
   } catch (error) {
     console.error("Could not read data.json, starting fresh:", error);
   }
   return emptyState();
 }
 
-export const state: StoreState = load();
+export const state: StoreState = supabaseConfigured() ? emptyState() : loadFile();
+
+// ---- Events table mirror ----
+
+export function eventRow(d: DropRecord) {
+  return {
+    id: d.id,
+    promoter_id: d.promoterId ?? null,
+    promoter_name: d.promoterName ?? null,
+    name: d.name,
+    venue: d.venue,
+    city: d.city ?? null,
+    scene: d.scene ?? null,
+    poster_url: d.posterUrl ?? null,
+    starts_at: d.startsAt,
+    price_zar: d.priceZar,
+    supply: d.supply,
+    sold: d.sold,
+    max_per_fan: d.maxPerFan,
+    resale_cap_zar: d.resaleCapZar,
+    resale_fee_pct: d.resaleFeePct,
+    state: d.state,
+    issuance_id: d.issuanceId,
+    issuance_tx: d.issuanceTx ?? null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function fromRow(r: any): DropRecord {
+  return {
+    id: r.id,
+    promoterId: r.promoter_id ?? undefined,
+    promoterName: r.promoter_name ?? undefined,
+    name: r.name,
+    venue: r.venue,
+    city: r.city ?? undefined,
+    scene: r.scene ?? undefined,
+    posterUrl: r.poster_url ?? undefined,
+    startsAt: r.starts_at,
+    state: r.state,
+    priceZar: Number(r.price_zar),
+    supply: Number(r.supply),
+    sold: Number(r.sold),
+    maxPerFan: Number(r.max_per_fan),
+    resaleCapZar: Number(r.resale_cap_zar),
+    resaleFeePct: Number(r.resale_fee_pct),
+    issuanceId: r.issuance_id ?? "",
+    issuanceTx: r.issuance_tx ?? undefined,
+    createdAt: r.created_at,
+  };
+}
+
+const dirtyDrops = new Set<string>();
+
+// Mark an event changed so its row in the events table is updated on the next save.
+export function touchDrop(id: string) {
+  dirtyDrops.add(id);
+  save();
+}
+
+// Load the snapshot and the events table at boot. Safe to call when Supabase is off.
+export async function initStore() {
+  if (!supabaseConfigured()) return;
+  const snap = await db().from("app_state").select("data").eq("id", STATE_ROW).maybeSingle();
+  if (snap.error) throw new Error(`Could not load app_state: ${snap.error.message}`);
+  Object.assign(state, snap.data?.data ? migrate(snap.data.data) : emptyState());
+
+  const rows = await db().from("events").select("*");
+  if (rows.error) throw new Error(`Could not load events: ${rows.error.message}`);
+  for (const r of rows.data ?? []) {
+    const fromTable = fromRow(r);
+    // The snapshot wins on live counters if it is ahead of the table.
+    const snapDrop = state.drops[fromTable.id];
+    state.drops[fromTable.id] = snapDrop && snapDrop.sold > fromTable.sold ? { ...fromTable, sold: snapDrop.sold, state: snapDrop.state } : fromTable;
+  }
+  console.log(`Loaded ${Object.keys(state.drops).length} event(s) from Supabase`);
+}
 
 let saveTimer: NodeJS.Timeout | null = null;
+let saving = Promise.resolve();
 
-// Debounced write so bursts of updates cost one disk write.
+// Debounced write so bursts of updates cost one write.
 export function save() {
   if (saveTimer) return;
   saveTimer = setTimeout(() => {
     saveTimer = null;
-    // Keep the file small.
-    state.events = state.events.slice(-200);
+    state.events = state.events.slice(-300);
     state.agentLog = state.agentLog.slice(-500);
-    state.processedTx = state.processedTx.slice(-1000);
-    fs.writeFile(DATA_FILE, JSON.stringify(state, null, 2), (error) => {
-      if (error) console.error("Failed to write data.json:", error);
+    state.processedTx = state.processedTx.slice(-2000);
+
+    if (!supabaseConfigured()) {
+      fs.writeFile(DATA_FILE, JSON.stringify(state, null, 2), (error) => {
+        if (error) console.error("Failed to write data.json:", error);
+      });
+      return;
+    }
+
+    const drops = [...dirtyDrops].map((id) => state.drops[id]).filter(Boolean);
+    dirtyDrops.clear();
+    const snapshot = JSON.parse(JSON.stringify(state));
+    saving = saving.then(async () => {
+      const a = await db().from("app_state").upsert({ id: STATE_ROW, data: snapshot, updated_at: new Date().toISOString() });
+      if (a.error) console.error("Failed to save app_state:", a.error.message);
+      if (drops.length) {
+        const b = await db().from("events").upsert(drops.map(eventRow));
+        if (b.error) console.error("Failed to save events:", b.error.message);
+      }
     });
-  }, 200);
+  }, 300);
 }
 
 export function resetState() {

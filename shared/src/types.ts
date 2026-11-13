@@ -48,7 +48,7 @@ export interface LedgerRef {
 
 // ---- Drop ----
 
-export type DropState = "scheduled" | "open" | "sold_out" | "closed";
+export type DropState = "scheduled" | "open" | "sold_out" | "closed" | "cancelled";
 
 export interface Drop {
   id: string;
@@ -65,11 +65,19 @@ export interface Drop {
   resaleFeePct: number;
   issuanceId: string;
   issuanceTx?: string;
+  city?: string;
+  scene?: string;
+  posterUrl?: string;
+  promoterId?: string;
+  promoterName?: string;
 }
 
 export interface CreateDropRequest {
   name: string;
   venue: string;
+  city?: string;
+  scene?: string;
+  posterUrl?: string;
   startsAt: string;
   priceZar: number;
   supply: number;
@@ -125,11 +133,14 @@ export interface LedgerItem {
   amountRlusd?: string;
   txHash?: string;
   explorerUrl?: string;
+  eventId?: string;
 }
 
 export interface FanTickets {
   count: number;
   history: LedgerItem[];
+  // Tickets held per event, for accounts that hold more than one event.
+  events?: { eventId: string; name: string; venue: string; startsAt: string; count: number }[];
 }
 
 // ---- Mandates (human only; the agent can read, never write) ----
@@ -139,6 +150,7 @@ export type MandateStatus = "active" | "filled" | "cancelled";
 export interface Mandate {
   id: string;
   fanId: string;
+  eventId?: string;
   quantity: number;
   ceilingZar: string;
   bought: number;
@@ -155,6 +167,7 @@ export interface PutMandateRequest {
 export interface SaleIntentRequest {
   fanId: string;
   quantity: number;
+  eventId?: string;
 }
 
 // What the agent puts in MemoData (JSON, hex-encoded) with MemoType "drop".
@@ -180,6 +193,7 @@ export type ListingStatus = "open" | "signing" | "settled" | "refused";
 
 export interface Listing {
   id: string;
+  eventId?: string;
   sellerFanId: string;
   priceZar: string;
   feeZar: string;
@@ -194,6 +208,7 @@ export interface Listing {
 export interface CreateListingRequest {
   fanId: string;
   priceZar: number;
+  eventId?: string;
 }
 
 export interface AcceptListingRequest {
@@ -279,6 +294,7 @@ export interface DropEvent {
   type: DropEventType;
   at: string;
   fanId?: string;
+  eventId?: string;
   listingId?: string;
   batchId?: string;
   message: string;
@@ -287,4 +303,45 @@ export interface DropEvent {
   tool?: string;
   txHash?: string;
   explorerUrl?: string;
+}
+
+
+// ---- Accounts and roles ----
+
+export type Role = "fan" | "promoter" | "admin";
+export type ApplicationStatus = "pending" | "approved" | "needs_more" | "rejected";
+
+export interface PromoterApplication {
+  userId: string;
+  kind: "business" | "independent";
+  displayName: string;
+  registrationNumber?: string;
+  pastEvents?: string;
+  socials?: string;
+  payoutDetails?: string;
+  status: ApplicationStatus;
+  reviewNote?: string;
+  reviewedAt?: string;
+  createdAt?: string;
+  email?: string;
+}
+
+export interface Me {
+  id: string;
+  email: string;
+  fullName: string;
+  role: Role;
+  verified: boolean;
+  walletReady: boolean;
+  walletAddress?: string;
+  application?: PromoterApplication;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  fullName: string;
+  role: Role;
+  verified: boolean;
+  createdAt: string;
 }
