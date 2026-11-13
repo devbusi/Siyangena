@@ -330,6 +330,7 @@ export interface Me {
   id: string;
   email: string;
   fullName: string;
+  phone?: string;
   role: Role;
   verified: boolean;
   walletReady: boolean;
@@ -341,6 +342,7 @@ export interface AdminUser {
   id: string;
   email: string;
   fullName: string;
+  phone?: string;
   role: Role;
   verified: boolean;
   createdAt: string;

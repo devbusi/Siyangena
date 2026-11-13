@@ -10,7 +10,7 @@ interface AuthState {
   signedIn: boolean;
   me: Me | null;
   refresh: () => Promise<Me | null>;
-  signUp: (p: { email: string; password: string; fullName: string; role: Exclude<Role, "admin"> }) => Promise<{ needsConfirm: boolean }>;
+  signUp: (p: { email: string; password: string; fullName: string; phone: string; role: Exclude<Role, "admin"> }) => Promise<{ needsConfirm: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -70,16 +70,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signedIn,
       me,
       refresh,
-      async signUp({ email, password, fullName, role }) {
+      async signUp({ email, password, fullName, phone, role }) {
         if (MOCK) {
-          mockAuth.signIn(email, fullName, role);
+          mockAuth.signIn(email, fullName, role, phone);
           return { needsConfirm: false };
         }
         if (!supabase) throw new Error("Sign-up isn't set up yet: the Supabase keys are missing");
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { full_name: fullName, role } },
+          options: { data: { full_name: fullName, phone, role } },
         });
         if (error) throw new Error(error.message);
         return { needsConfirm: !data.session };

@@ -37,7 +37,7 @@ const authListeners = new Set<() => void>();
 
 export const mockAuth = {
   user: () => current,
-  signIn(email: string, name?: string, role?: Role) {
+  signIn(email: string, name?: string, role?: Role, _phone?: string) {
     const lower = email.toLowerCase();
     const known = Object.values(PEOPLE).find((p) => p.email === lower);
     current = known ?? {

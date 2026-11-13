@@ -128,6 +128,13 @@ export function Landing() {
   );
 }
 
+// South African mobile numbers: 0XX XXX XXXX or +27 XX XXX XXXX. Stored as +27XXXXXXXXX.
+function normalisePhone(raw: string): string | null {
+  const digits = raw.replace(/[^\d+]/g, "");
+  const local = digits.startsWith("+27") ? digits.slice(3) : digits.startsWith("27") && digits.length === 11 ? digits.slice(2) : digits.startsWith("0") ? digits.slice(1) : digits;
+  return /^[6-8]\d{8}$/.test(local) ? `+27${local}` : null;
+}
+
 export function SignUp() {
   const { signUp } = useAuth();
   const navigate = useNavigate();
@@ -135,6 +142,7 @@ export function SignUp() {
   const [role, setRole] = useState<"fan" | "promoter">(params.get("as") === "promoter" ? "promoter" : "fan");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -147,7 +155,13 @@ export function SignUp() {
     setBusy(true);
     try {
       const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
-      const result = await signUp({ email: email.trim(), password, fullName, role });
+      const normalised = normalisePhone(phone);
+      if (!normalised) {
+        setError("Enter a South African mobile number, like 082 123 4567");
+        setBusy(false);
+        return;
+      }
+      const result = await signUp({ email: email.trim(), password, fullName, phone: normalised, role });
       if (result.needsConfirm) setConfirm(true);
       else navigate(`/setup?next=${role === "promoter" ? "/promoter" : params.get("next") || "/events"}`);
     } catch (err) {
@@ -201,6 +215,11 @@ export function SignUp() {
               <label htmlFor="last">Last name</label>
               <input id="last" className="input" required autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
             </div>
+          </div>
+          <div className="field">
+            <label htmlFor="phone">Mobile number</label>
+            <input id="phone" className="input" type="tel" inputMode="tel" required autoComplete="tel" placeholder="082 123 4567" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <p className="faint">For your tickets, gifts and alerts. We never share it.</p>
           </div>
           <div className="field">
             <label htmlFor="email">Email</label>

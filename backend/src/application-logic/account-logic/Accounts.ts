@@ -16,6 +16,7 @@ export interface Profile {
   id: string;
   email: string;
   fullName: string;
+  phone?: string;
   role: Role;
   verified: boolean;
   walletAddress?: string;
@@ -32,6 +33,7 @@ function toProfile(r: any): Profile {
     id: r.id,
     email: r.email ?? "",
     fullName: r.full_name ?? "",
+    phone: r.phone ?? undefined,
     role: r.role,
     verified: Boolean(r.verified),
     walletAddress: r.wallet_address ?? undefined,
@@ -103,7 +105,7 @@ export class Accounts {
   }
 
   // The sign-up trigger normally makes the profile. This covers accounts made before it ran.
-  async ensureProfile(user: { id: string; email?: string; fullName?: string; role?: string }): Promise<Profile> {
+  async ensureProfile(user: { id: string; email?: string; fullName?: string; role?: string; phone?: string }): Promise<Profile> {
     const existing = check(await db().from("profiles").select("*").eq("id", user.id).maybeSingle(), "Load profile");
     if (existing) {
       const profile = toProfile(existing);
@@ -114,7 +116,7 @@ export class Accounts {
     const row = check(
       await db()
         .from("profiles")
-        .insert({ id: user.id, email: user.email ?? null, full_name: user.fullName ?? null, role })
+        .insert({ id: user.id, email: user.email ?? null, full_name: user.fullName ?? null, phone: user.phone ?? null, role })
         .select("*")
         .single(),
       "Create profile",
@@ -209,6 +211,7 @@ export class Accounts {
       id: profile.id,
       email: profile.email,
       fullName: profile.fullName,
+      ...(profile.phone ? { phone: profile.phone } : {}),
       role: profile.role,
       verified: profile.verified,
       walletReady: wallets.has(userId),
@@ -297,7 +300,7 @@ export class Accounts {
     return rows.map((r) => {
       const p = toProfile(r);
       profiles.set(p.id, p);
-      return { id: p.id, email: p.email, fullName: p.fullName, role: p.role, verified: p.verified, createdAt: p.createdAt ?? "" };
+      return { id: p.id, email: p.email, fullName: p.fullName, phone: p.phone, role: p.role, verified: p.verified, createdAt: p.createdAt ?? "" };
     });
   }
 

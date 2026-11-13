@@ -149,7 +149,7 @@ export function AdminHome() {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
-              {["Name", "Email", "Role", "Verified"].map((h) => (
+              {["Name", "Email", "Phone", "Role", "Verified"].map((h) => (
                 <th key={h} style={{ textAlign: "left", padding: "10px 8px", borderBottom: "2.5px solid #000", textTransform: "uppercase", fontSize: 13 }}>
                   {h}
                 </th>
@@ -161,6 +161,7 @@ export function AdminHome() {
               <tr key={u.id}>
                 <td style={{ padding: "10px 8px", borderBottom: "2px solid #000", fontWeight: 700 }}>{u.fullName || "No name"}</td>
                 <td style={{ padding: "10px 8px", borderBottom: "2px solid #000" }}>{u.email}</td>
+                <td style={{ padding: "10px 8px", borderBottom: "2px solid #000" }}>{u.phone || "None"}</td>
                 <td style={{ padding: "10px 8px", borderBottom: "2px solid #000" }}>
                   <label className="sr-only" htmlFor={`role-${u.id}`}>
                     Role for {u.email}

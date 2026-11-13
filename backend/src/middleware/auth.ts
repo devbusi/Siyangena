@@ -43,6 +43,7 @@ async function actorFromToken(token: string): Promise<Actor> {
       email: user.email ?? undefined,
       fullName: (user.user_metadata?.full_name as string | undefined) ?? undefined,
       role: user.user_metadata?.role as string | undefined,
+      phone: (user.user_metadata?.phone as string | undefined) ?? user.phone ?? undefined,
     }));
   const actor: Actor = {
     kind: "user",
