@@ -9,6 +9,7 @@ interface AuthState {
   ready: boolean; // the first session check is done
   signedIn: boolean;
   me: Me | null;
+  meError: string; // why the account couldn't load (backend down, etc.)
   refresh: () => Promise<Me | null>;
   signUp: (p: { email: string; password: string; fullName: string; phone: string; role: Exclude<Role, "admin"> }) => Promise<{ needsConfirm: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
@@ -21,14 +22,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [me, setMe] = useState<Me | null>(null);
+  const [meError, setMeError] = useState("");
 
   const refresh = useCallback(async () => {
     try {
       const next = await api.me();
       setMe(next);
+      setMeError("");
       return next;
-    } catch {
+    } catch (e) {
       setMe(null);
+      setMeError(e instanceof Error ? e.message : "Couldn't load your account");
       return null;
     }
   }, []);
@@ -69,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ready,
       signedIn,
       me,
+      meError,
       refresh,
       async signUp({ email, password, fullName, phone, role }) {
         if (MOCK) {
@@ -99,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setMe(null);
       },
     }),
-    [ready, signedIn, me, refresh],
+    [ready, signedIn, me, meError, refresh],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

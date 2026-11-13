@@ -398,15 +398,30 @@ export function DemoBar() {
 
 // Route guards. Signed-out people go to sign in, then come back.
 export function RequireAuth({ children, role }: { children: ReactNode; role?: "fan" | "promoter" | "admin" }) {
-  const { ready, signedIn, me } = useAuth();
+  const { ready, signedIn, me, meError, refresh, signOut } = useAuth();
   const location = useLocation();
+  const stuck = ready && signedIn && !me && Boolean(meError);
+  // If the account didn't load (say the server was restarting), keep retrying quietly.
+  useEffect(() => {
+    if (!stuck) return;
+    const t = setInterval(() => void refresh(), 4000);
+    return () => clearInterval(t);
+  }, [stuck, refresh]);
   if (!ready || (signedIn && !me)) {
     return (
       <div className="phone">
         <TopBar />
-        <p className="muted" style={{ marginTop: 40, textAlign: "center" }}>
-          Loading your account
-        </p>
+        <div className="stack" style={{ marginTop: 40, alignItems: "center", textAlign: "center", gap: 14 }}>
+          <p className="muted">{stuck ? meError : "Loading your account"}</p>
+          {stuck && (
+            <div className="row" style={{ gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+              <Button onClick={() => void refresh()}>Try again</Button>
+              <Button variant="ghost" onClick={() => void signOut()}>
+                Sign out
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
