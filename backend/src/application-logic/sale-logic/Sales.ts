@@ -1,0 +1,254 @@
+import { GlobalFlags } from "xrpl";
+import { SALE_INTENT_TTL_MS, decodeDropMemo, type SaleIntent } from "@drop/shared";
+import { state, save, IntentRecord } from "../../lib/store";
+import { conflict, forbidden } from "../../lib/utils/errors";
+import { newId, nowIso } from "../../lib/utils/ids";
+import { addAmounts, sameAmount, zarToSettle } from "../../lib/utils/money";
+import { xrplClient } from "../../xrpl/xrpl.client";
+import { xrplConfig } from "../../xrpl/xrpl.config";
+import { xrplWallet } from "../../xrpl/xrpl.wallet";
+import { xrplMpt } from "../../xrpl/xrpl.mpt";
+import { xrplPayments } from "../../xrpl/xrpl.payments";
+import { readSettleAmount } from "../../xrpl/xrpl.amounts";
+import { Drop } from "../drop-logic/Drop";
+import { Fans } from "../fan-logic/Fans";
+import { Mandates } from "../mandate-logic/Mandates";
+import { Events } from "../event-logic/Events";
+
+const dropService = new Drop();
+const fanService = new Fans();
+const mandateService = new Mandates();
+const events = new Events();
+
+// Last ledger the watcher saw, so a reconnect can catch up on what it missed.
+let lastSeenLedger = 0;
+
+export class Sales {
+  private expireIntents() {
+    const now = Date.now();
+    for (const intent of Object.values(state.intents)) {
+      if (intent.status === "pending" && Date.parse(intent.expiresAt) < now) {
+        intent.status = "expired";
+      }
+    }
+  }
+
+  private pending(): IntentRecord[] {
+    this.expireIntents();
+    return Object.values(state.intents).filter((i) => i.status === "pending");
+  }
+
+  // Step 1 of a primary purchase. Every service rule is checked here; the agent then
+  // submits the Payment itself with the returned memo.
+  async createIntent(fanId: string, quantity: number): Promise<SaleIntent> {
+    const drop = dropService.getRecord();
+    fanService.getContext(fanId);
+
+    if (drop.state === "sold_out") throw conflict("SOLD_OUT", "Drop is sold out");
+    if (drop.state !== "open") throw conflict("NOT_OPEN", `Drop is ${drop.state}`);
+
+    fanService.assertVerified(fanId);
+    const mandate = mandateService.assertWithinMandate(fanId, quantity, drop.priceZar);
+
+    const pending = this.pending();
+    const fanPending = pending.filter((i) => i.fanId === fanId).reduce((n, i) => n + i.quantity, 0);
+    const held = await fanService.getTicketCount(fanId);
+    if (held + fanPending + quantity > drop.maxPerFan) {
+      const message = `${fanId}: max ${drop.maxPerFan} per fan (holds ${held}, pending ${fanPending}, asked ${quantity})`;
+      events.emit("mandate.blocked", message, { fanId });
+      throw forbidden("LIMIT_PER_FAN", message);
+    }
+
+    const reserved = pending.reduce((n, i) => n + i.quantity, 0);
+    if (drop.sold + reserved + quantity > drop.supply) {
+      throw conflict("SOLD_OUT", `Only ${Math.max(0, drop.supply - drop.sold - reserved)} ticket(s) left`);
+    }
+
+    const intent: IntentRecord = {
+      requestId: newId("req"),
+      fanId,
+      mandateId: mandate.id,
+      quantity,
+      amountRlusd: zarToSettle(drop.priceZar * quantity),
+      status: "pending",
+      createdAt: nowIso(),
+      expiresAt: new Date(Date.now() + SALE_INTENT_TTL_MS).toISOString(),
+    };
+    state.intents[intent.requestId] = intent;
+    save();
+
+    events.emit("sale.intent", `${fanId} asked for ${quantity} ticket(s): pay ${intent.amountRlusd} ${xrplConfig.settleAsset}`, {
+      fanId,
+    });
+
+    return {
+      requestId: intent.requestId,
+      payTo: xrplWallet.getPromoterWallet().address,
+      amountRlusd: intent.amountRlusd,
+      memo: { kind: "sale", requestId: intent.requestId, mandateId: mandate.id },
+      expiresAt: intent.expiresAt,
+    };
+  }
+
+  // ---- Watcher: subscribe to the promoter account, match memo, send tickets or refund ----
+
+  async startWatcher() {
+    if (!xrplConfig.hasPromoter()) {
+      console.warn("PROMOTER_SEED not set: sale watcher not started");
+      return;
+    }
+    const promoter = xrplWallet.getPromoterWallet().address;
+    const client = xrplClient.getClient();
+
+    client.on("transaction", (ev: any) => {
+      this.handleStreamTx(ev).catch((error) => console.error("Sale watcher error:", error));
+    });
+
+    const subscribe = async (catchUp: boolean) => {
+      await client.request({ command: "subscribe", accounts: [promoter] });
+      if (catchUp && lastSeenLedger > 0) await this.catchUp(promoter);
+    };
+    client.on("connected", () => {
+      subscribe(true).catch((error) => console.error("Resubscribe failed:", error));
+    });
+
+    await xrplClient.ensureConnected();
+    await subscribe(false);
+    lastSeenLedger = await xrplClient.getLedgerIndex();
+    console.log(`Sale watcher subscribed to promoter ${promoter} on ${xrplConfig.network}`);
+  }
+
+  // After a reconnect, process anything that landed while we were away.
+  private async catchUp(promoter: string) {
+    const res: any = await xrplClient.getClient().request({
+      command: "account_tx",
+      account: promoter,
+      ledger_index_min: lastSeenLedger,
+      ledger_index_max: -1,
+      forward: true,
+    });
+    for (const t of res.result.transactions) {
+      await this.handleStreamTx({ ...t, tx_json: t.tx_json ?? t.tx, validated: t.validated });
+    }
+  }
+
+  private async handleStreamTx(ev: any) {
+    if (!ev.validated) return;
+    const tx = ev.tx_json ?? ev.transaction;
+    const hash: string = ev.hash ?? tx?.hash;
+    const meta = ev.meta;
+    if (!tx || !hash || !meta) return;
+    if (ev.ledger_index) lastSeenLedger = Math.max(lastSeenLedger, ev.ledger_index);
+
+    if (state.processedTx.includes(hash)) return;
+    state.processedTx.push(hash);
+    save();
+
+    const promoter = xrplWallet.getPromoterWallet().address;
+    if (tx.TransactionType !== "Payment" || tx.Destination !== promoter || tx.Account === promoter) return;
+    // Resale Batch legs are settled by the resale flow, not here.
+    if ((tx.Flags ?? 0) & GlobalFlags.tfInnerBatchTxn) return;
+    if (meta.TransactionResult !== "tesSUCCESS") return;
+
+    const delivered = readSettleAmount(meta.delivered_amount);
+    if (delivered === null) return; // tickets returned, other assets: not a sale
+
+    await this.handlePayment({ hash, from: tx.Account, amount: delivered, memos: tx.Memos });
+  }
+
+  private async handlePayment(p: { hash: string; from: string; amount: string; memos: any }) {
+    const memo = decodeDropMemo(p.memos);
+    const fan = fanService.findByAgentAddress(p.from);
+
+    // Plain payments with no Drop memo from outside the cast (faucet, bank top-ups) are ignored.
+    if (!memo && !fan) return;
+
+    const refund = async (reason: string, requestId?: string) => {
+      const result = await xrplPayments.promoterPay({
+        to: p.from,
+        amount: p.amount,
+        memo: { kind: "refund", requestId, reason },
+      });
+      if (requestId && state.intents[requestId]) state.intents[requestId].status = "refunded";
+      save();
+      events.emit("sale.refunded", `Refunded ${p.amount} ${xrplConfig.settleAsset} to ${fan?.id ?? p.from}: ${reason}`, {
+        fanId: fan?.id,
+        txHash: result.hash,
+      });
+      if (fan) {
+        fanService.addHistory(fan.id, {
+          kind: "refund",
+          description: `Refund: ${reason}`,
+          tickets: 0,
+          amountRlusd: p.amount,
+          txHash: result.hash,
+        });
+      }
+    };
+
+    const intent = memo?.kind === "sale" && memo.requestId ? state.intents[memo.requestId] : undefined;
+    if (!intent) return refund("payment does not match a sale intent", memo?.requestId);
+    if (intent.status !== "pending" && intent.status !== "expired") {
+      return refund(`intent already ${intent.status}`, intent.requestId);
+    }
+    const intentFan = fanService.getContext(intent.fanId);
+    if (intentFan.agent.address !== p.from) return refund("paid from the wrong account", intent.requestId);
+    if (!sameAmount(p.amount, intent.amountRlusd)) {
+      return refund(`expected ${intent.amountRlusd}, got ${p.amount}`, intent.requestId);
+    }
+
+    const drop = dropService.getRecord();
+    if (drop.sold + intent.quantity > drop.supply) return refund("sold out", intent.requestId);
+
+    intent.status = "paid";
+    intent.paymentTx = p.hash;
+    save();
+    events.emit("sale.paid", `${intent.fanId} paid ${p.amount} ${xrplConfig.settleAsset} for ${intent.quantity} ticket(s)`, {
+      fanId: intent.fanId,
+      txHash: p.hash,
+    });
+    fanService.addHistory(intent.fanId, {
+      kind: "primary_purchase",
+      description: `Paid for ${intent.quantity} ticket(s)`,
+      tickets: 0,
+      amountRlusd: p.amount,
+      txHash: p.hash,
+    });
+
+    // Reserve supply before the await so concurrent payments can't oversell.
+    dropService.markSold(intent.quantity);
+    const sent = await xrplMpt.sendTickets({
+      to: intentFan.agent.address,
+      issuanceId: drop.issuanceId,
+      quantity: intent.quantity,
+      memo: { kind: "ticket", requestId: intent.requestId, mandateId: intent.mandateId },
+    });
+
+    if (sent.result !== "tesSUCCESS") {
+      dropService.unmarkSold(intent.quantity);
+      events.emit("ledger.rejected", `Ticket transfer to ${intent.fanId} failed: ${sent.result}`, {
+        fanId: intent.fanId,
+        txHash: sent.hash,
+      });
+      intent.status = "pending"; // let refund() mark it refunded
+      return refund(`ticket transfer failed (${sent.result})`, intent.requestId);
+    }
+
+    intent.status = "fulfilled";
+    intent.ticketTx = sent.hash;
+    mandateService.recordPurchase(intent.fanId, intent.quantity);
+    state.stats.revenueRlusd = addAmounts(state.stats.revenueRlusd, p.amount);
+    save();
+
+    events.emit("sale.ticket_sent", `Sent ${intent.quantity} ticket(s) to ${intent.fanId}`, {
+      fanId: intent.fanId,
+      txHash: sent.hash,
+    });
+    fanService.addHistory(intent.fanId, {
+      kind: "ticket_received",
+      description: `Received ${intent.quantity} ticket(s) from the promoter`,
+      tickets: intent.quantity,
+      txHash: sent.hash,
+    });
+  }
+}

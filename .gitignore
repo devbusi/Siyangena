@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Environment files (seeds live here, never commit them)
+.env
+.env.*
+!.env.example
+
+# Runtime state written by the backend store
+data.json
+
+# Build output
+dist/
+build/
+out/
+.next/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# Runtime / secrets
+*.seed
+*.pem
+*.key
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

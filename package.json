@@ -1,0 +1,23 @@
+{
+  "name": "drop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Drop: AI agents that get fans tickets on a ledger that makes scalping and ticket scams impossible.",
+  "workspaces": [
+    "shared",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w backend",
+    "start": "npm run start -w backend",
+    "typecheck": "npm run typecheck -w shared && npm run typecheck -w backend",
+    "preflight": "tsx scripts/preflight.ts"
+  },
+  "devDependencies": {
+    "@drop/shared": "*",
+    "@types/node": "^24.5.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "xrpl": "^5.3.0"
+  }
+}
