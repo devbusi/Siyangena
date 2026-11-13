@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { Button, Enter, Ticket, TopBar } from "../components/ui";
+import { Button, Enter, Marquee, Ticket, TopBar } from "../components/ui";
 import { CityArt, type Scene } from "../components/CityArt";
 import { api } from "../lib/api";
 import { rand } from "../lib/format";
@@ -43,8 +43,9 @@ export function Discover() {
     <>
       <div className="phone">
         <TopBar />
-        <Enter>
-          <h1 style={{ margin: "10px 0 14px" }}>Events near you</h1>
+        <Enter className="wide">
+          <Marquee rows={[["Cape Town", "Joburg", "Durban", "This weekend"]]} size={44} speed={34} />
+          <h1 style={{ margin: "4px 0 14px" }}>Events near you</h1>
           <div className="chips" role="group" aria-label="City">
             {CITIES.map((c) => (
               <motion.button key={c} type="button" className="chip" aria-pressed={city === c} whileTap={{ scale: 0.92 }} onClick={() => setCity(c)}>
@@ -53,7 +54,7 @@ export function Discover() {
             ))}
           </div>
         </Enter>
-        <motion.div layout className="stack" style={{ marginTop: 18 }}>
+        <motion.div layout className="event-grid wide" style={{ marginTop: 18 }}>
           <AnimatePresence mode="popLayout">
             {shown.map((c, i) => {
               const inner = (

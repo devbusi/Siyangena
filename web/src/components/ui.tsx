@@ -67,7 +67,7 @@ export function CoinField({ height = 220, bg = "#56db9c", stripe = "#c9f3df" }: 
     { x: "-6%", y: "70%", s: 70, t: 40, d: 1 },
   ];
   return (
-    <div className="art-box" style={{ height, background: bg }} aria-hidden="true">
+    <div className="art-box coin-field" style={{ height, background: bg }} aria-hidden="true">
       <svg width="100%" height="100%" style={{ position: "absolute", inset: 0 }} preserveAspectRatio="none" viewBox="0 0 100 100">
         <polygon points="0,30 100,78 100,100 0,52" fill={stripe} />
         <polygon points="0,-10 60,-10 0,18" fill={stripe} />
@@ -78,6 +78,11 @@ export function CoinField({ height = 220, bg = "#56db9c", stripe = "#c9f3df" }: 
           style={{ position: "absolute", left: c.x, top: c.y }}
           initial={reduce ? false : { y: -height - 60, rotate: c.t - 60 }}
           animate={{ y: 0, rotate: c.t }}
+          drag
+          dragSnapToOrigin
+          dragTransition={{ bounceStiffness: 300, bounceDamping: 14 }}
+          whileHover={{ scale: 1.06, rotate: c.t + 14 }}
+          whileDrag={{ scale: 1.12, zIndex: 5 }}
           transition={{ type: "spring", stiffness: 140, damping: 13, delay: c.d * 0.5 }}
         >
           <motion.div
@@ -92,17 +97,66 @@ export function CoinField({ height = 220, bg = "#56db9c", stripe = "#c9f3df" }: 
   );
 }
 
-export function Ticker({ items }: { items: string[] }) {
-  const doubled = [...items, ...items];
+type Tile = { text: string; bg: string; fg?: string };
+
+const TILE_SETS: Record<string, string[]> = {
+  warm: ["#ffffff", "#ff5a36", "#8ec5ff", "#56db9c", "#e3c6ff", "#ffd43b"],
+};
+
+// Slush-style marquee: rows of rounded colour tiles with giant condensed words,
+// alternate rows run the other way, hovering a tile leans its text and pauses the row.
+export function Marquee({ rows, size = 64, speed = 28 }: { rows: string[][]; size?: number; speed?: number }) {
+  const palette = TILE_SETS.warm;
   return (
-    <div className="ticker" role="marquee" aria-label={items.join(". ")}>
-      <div className="ticker-track" aria-hidden="true">
-        {doubled.map((t, i) => (
-          <span key={i}>{t}</span>
-        ))}
-      </div>
+    <div className="marquee" style={{ ["--tile" as string]: `${size}px` }}>
+      {rows.map((words, r) => {
+        const tiles: Tile[] = words.map((w, i) => ({ text: w, bg: palette[(i * 2 + r * 3) % palette.length] }));
+        const loop = [...tiles, ...tiles, ...tiles, ...tiles];
+        return (
+          <div className="marquee-row" key={r} aria-hidden="true">
+            <div className={`marquee-track ${r % 2 ? "reverse" : ""}`} style={{ animationDuration: `${speed + r * 6}s` }}>
+              {loop.map((t, i) => (
+                <span className="tile" key={i} style={{ background: t.bg, color: t.fg ?? "#000" }}>
+                  <span className="tile-text">{t.text}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      <span className="sr-only">{rows.flat().join(". ")}</span>
     </div>
   );
+}
+
+// Draggable coin stickers that sit over a marquee, like Slush's.
+export function Stickers({ items }: { items: { x: string; y: string; size: number; tilt: number; face?: string }[] }) {
+  const reduce = useReducedMotion();
+  return (
+    <>
+      {items.map((c, i) => (
+        <motion.div
+          key={i}
+          className="sticker"
+          style={{ left: c.x, top: c.y }}
+          drag
+          dragSnapToOrigin
+          dragTransition={{ bounceStiffness: 300, bounceDamping: 14 }}
+          initial={reduce ? false : { scale: 0, rotate: c.tilt - 90 }}
+          animate={{ scale: 1, rotate: c.tilt }}
+          whileHover={{ scale: 1.08, rotate: c.tilt + 12 }}
+          whileDrag={{ scale: 1.15, cursor: "grabbing" }}
+          transition={{ type: "spring", stiffness: 260, damping: 14, delay: reduce ? 0 : 0.3 + i * 0.12 }}
+        >
+          <Coin size={c.size} face={c.face} />
+        </motion.div>
+      ))}
+    </>
+  );
+}
+
+export function Ticker({ items }: { items: string[] }) {
+  return <Marquee rows={[items]} size={30} speed={30} />;
 }
 
 const PERSONAS: { id: Persona; label: string }[] = [
@@ -163,10 +217,11 @@ export function DemoBar() {
 }
 
 // One orchestrated entrance per screen: children rise in sequence.
-export function Enter({ children, delay = 0 }: { children: ReactNode; delay?: number }) {
+export function Enter({ children, delay = 0, className }: { children: ReactNode; delay?: number; className?: string }) {
   const reduce = useReducedMotion();
   return (
     <motion.div
+      className={className}
       initial={reduce ? false : { opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 260, damping: 26, delay }}

@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { Button, Enter, TopBar } from "../components/ui";
-import { CityArt } from "../components/CityArt";
+import { Button, Enter, Marquee, Stickers, TopBar } from "../components/ui";
 import { api } from "../lib/api";
 import { useApp } from "../lib/store";
 
@@ -15,10 +14,18 @@ export function Welcome() {
     <>
       <div className="phone">
         <TopBar />
-        <Enter>
-          <div className="art-box" style={{ height: 190, margin: "8px 0 22px" }}>
-            <CityArt scene="braamfontein" />
+        <Enter className="wide">
+          <div className="hero-marquee">
+            <Marquee rows={[["Real tickets", "No scalpers", "Siyangena"], ["Your agent", "Your limits", "Fair resale"]]} size={58} />
+            <Stickers
+              items={[
+                { x: "4%", y: "-18px", size: 84, tilt: -16 },
+                { x: "70%", y: "40%", size: 100, tilt: 18, face: "#56db9c" },
+              ]}
+            />
           </div>
+        </Enter>
+        <Enter delay={0.05}>
           <h1>Scalpers have bots. Now fans have agents.</h1>
           <p className="muted" style={{ marginTop: 12, fontSize: "1.1rem" }}>
             Your agent gets you real tickets the moment they go on sale, at prices you set.

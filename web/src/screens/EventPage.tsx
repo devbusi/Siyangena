@@ -31,9 +31,10 @@ export function EventPage() {
           ]}
         />
 
+        <div className="event-layout">
         <Enter>
-          <section aria-labelledby="event-title">
-            <CoinField height={210} />
+          <section aria-labelledby="event-title" className="event-hero">
+            <CoinField height={240} />
             <div className="row" style={{ marginTop: 16 }}>
               <span className={`pill ${onSale ? "pill-live" : ""}`}>{onSale ? `${left} tickets left` : "Limited tickets"}</span>
               <span className="faint">{drop ? dateLong(drop.startsAt) : "Sat 12 Dec, 19:00"}</span>
@@ -45,6 +46,7 @@ export function EventPage() {
           </section>
         </Enter>
 
+        <div className="event-side">
         <Enter delay={0.08}>
           <div className="price-row">
             <div className="panel">
@@ -84,6 +86,8 @@ export function EventPage() {
             ))}
           </ul>
         </Enter>
+        </div>
+        </div>
       </div>
 
       <div className="bottom-bar">

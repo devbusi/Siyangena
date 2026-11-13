@@ -263,38 +263,90 @@ button {
   cursor: not-allowed;
 }
 
-/* ---------- Ticker ---------- */
+/* ---------- Marquee tiles (Slush style) ---------- */
 
-.ticker {
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
   overflow: hidden;
-  background: #000;
-  color: #fff;
-  border-radius: var(--r-pill);
-  margin: 4px 0 16px;
-}
-
-.ticker-track {
-  display: flex;
-  width: max-content;
-  gap: 24px;
-  padding: 9px 0;
-  animation: ticker 22s linear infinite;
-  font-weight: 900;
-  font-stretch: 75%;
-  text-transform: uppercase;
-  font-size: 1rem;
+  clip: rect(0 0 0 0);
   white-space: nowrap;
 }
 
-.ticker-track span::after {
-  content: "✶";
-  color: var(--sun);
-  margin-left: 24px;
+.marquee {
+  position: relative;
+  display: grid;
+  gap: calc(var(--tile) * 0.16);
+  margin: 4px -18px 16px;
+  overflow: hidden;
 }
 
-@keyframes ticker {
+.marquee-row {
+  overflow: visible;
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  gap: calc(var(--tile) * 0.16);
+  animation: marquee 28s linear infinite;
+}
+
+.marquee-track.reverse {
+  animation-direction: reverse;
+}
+
+.marquee-row:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+.tile {
+  display: inline-flex;
+  align-items: center;
+  border: 3px solid #000;
+  border-radius: calc(var(--tile) * 0.28);
+  padding: calc(var(--tile) * 0.08) calc(var(--tile) * 0.3) calc(var(--tile) * 0.02);
+  font-weight: 900;
+  font-stretch: 62%;
+  text-transform: uppercase;
+  font-size: var(--tile);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.tile-text {
+  display: inline-block;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.tile:hover .tile-text {
+  transform: skewX(-14deg) scaleY(1.06);
+}
+
+@keyframes marquee {
   to {
     transform: translateX(-50%);
+  }
+}
+
+.hero-marquee {
+  position: relative;
+  margin: 6px 0 22px;
+}
+
+.sticker {
+  position: absolute;
+  z-index: 3;
+  cursor: grab;
+  touch-action: none;
+  filter: drop-shadow(0 0 0 transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
   }
 }
 
@@ -575,11 +627,6 @@ button {
   margin: 0 auto;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .ticker-track {
-    animation: none;
-  }
-}
 
 /* ---------- Forms ---------- */
 
@@ -1057,4 +1104,100 @@ input[type="range"] {
   min-height: 46px;
   padding: 0 16px;
   font-size: 0.85rem;
+}
+
+/* ---------- Event cards hover, grid ---------- */
+
+.event-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.event-card h3 {
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: left bottom;
+}
+
+.event-card:hover h3 {
+  transform: skewX(-10deg);
+}
+
+.coin-field > div {
+  cursor: grab;
+  touch-action: none;
+}
+
+/* ---------- Desktop web: fans get a full web app, promoters a desk ---------- */
+
+@media (min-width: 900px) {
+  .app {
+    padding: 10px 16px;
+  }
+
+  .phone {
+    max-width: 1180px;
+    padding: 0 40px 140px;
+  }
+
+  .phone > :where(:not(.topbar, .event-layout, .wide, .marquee)) {
+    max-width: 620px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .phone .marquee {
+    margin-left: -40px;
+    margin-right: -40px;
+  }
+
+
+  .event-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .event-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: 40px;
+    align-items: start;
+  }
+
+  .event-layout .price-row {
+    margin-top: 0;
+  }
+
+  .tabbar {
+    top: 64px;
+    bottom: auto;
+    left: auto;
+    right: max(64px, calc(50% - 530px));
+    transform: none;
+  }
+
+  .bottom-bar {
+    width: min(calc(100% - 38px), 1174px);
+  }
+
+  .sheet {
+    border-radius: 30px;
+    border-bottom: 3px solid #000;
+    margin-bottom: 40px;
+  }
+
+  .desk-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 380px);
+    gap: 32px;
+    align-items: start;
+  }
+
+  .desk-aside {
+    position: sticky;
+    top: 20px;
+  }
+}
+
+.desk .marquee {
+  margin-left: -24px;
+  margin-right: -24px;
 }
