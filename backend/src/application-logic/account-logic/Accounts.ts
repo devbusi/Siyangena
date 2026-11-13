@@ -1,5 +1,6 @@
 import { Wallet } from "xrpl";
-import type { AdminUser, ApplicationStatus, Me, PromoterApplication, Role } from "@drop/shared";
+import type { AdminUser, ApplicationStatus, ChangeRequest, Me, PromoterApplication, Role } from "@drop/shared";
+import { state, save, touchDrop } from "../../lib/store";
 import { RLUSD_CURRENCY_HEX } from "@drop/shared";
 import { db, supabaseConfigured } from "../../lib/supabase";
 import { decryptSecret, encryptSecret } from "../../lib/crypto";
@@ -229,7 +230,84 @@ export class Accounts {
       walletReady: wallets.has(userId),
       ...(profile.walletAddress ? { walletAddress: profile.walletAddress } : {}),
       ...(application ? { application } : {}),
+      ...(state.changeRequests[userId] ? { changeRequest: state.changeRequests[userId] } : {}),
     };
+  }
+
+  // ---- Editing your own details ----
+
+  async updateProfile(userId: string, input: { fullName?: string; phone?: string }) {
+    const patch: Record<string, unknown> = {};
+    if (input.fullName !== undefined) patch.full_name = input.fullName;
+    if (input.phone !== undefined) patch.phone = input.phone || null;
+    if (Object.keys(patch).length) check(await db().from("profiles").update(patch).eq("id", userId), "Update profile");
+    profiles.delete(userId);
+    return this.me(userId);
+  }
+
+  // Socials and past events change straight away. The public name, registration number
+  // and bank account were checked by an admin, so changing them needs approval again.
+  async updatePromoterDetails(
+    userId: string,
+    input: { socials?: string; pastEvents?: string; displayName?: string; registrationNumber?: string; payoutDetails?: string },
+  ) {
+    const application = await this.getApplication(userId);
+    if (!application) throw badRequest("INVALID_STATE", "Apply as a promoter first");
+    const direct: Record<string, unknown> = {};
+    if (input.socials !== undefined) direct.socials = input.socials || null;
+    if (input.pastEvents !== undefined) direct.past_events = input.pastEvents || null;
+    if (Object.keys(direct).length) {
+      check(await db().from("promoter_applications").update({ ...direct, updated_at: new Date().toISOString() }).eq("user_id", userId), "Update details");
+    }
+    const critical: Partial<ChangeRequest> = {};
+    if (input.displayName !== undefined && input.displayName !== application.displayName) critical.displayName = input.displayName;
+    if (input.registrationNumber !== undefined && input.registrationNumber !== (application.registrationNumber ?? "")) critical.registrationNumber = input.registrationNumber;
+    if (input.payoutDetails !== undefined && input.payoutDetails !== (application.payoutDetails ?? "")) critical.payoutDetails = input.payoutDetails;
+    if (Object.keys(critical).length) {
+      state.changeRequests[userId] = { userId, ...critical, status: "pending", createdAt: new Date().toISOString() };
+      save();
+    }
+    return this.me(userId);
+  }
+
+  async listChangeRequests(): Promise<ChangeRequest[]> {
+    const pending = Object.values(state.changeRequests).filter((c) => c.status === "pending");
+    return Promise.all(
+      pending.map(async (c) => {
+        const a = await this.getApplication(c.userId).catch(() => undefined);
+        const email = profiles.get(c.userId)?.email;
+        return {
+          ...c,
+          ...(email ? { email } : {}),
+          current: { displayName: a?.displayName, registrationNumber: a?.registrationNumber, payoutDetails: a?.payoutDetails },
+        };
+      }),
+    );
+  }
+
+  async reviewChangeRequest(userId: string, decision: "approved" | "rejected", note?: string) {
+    const c = state.changeRequests[userId];
+    if (!c || c.status !== "pending") throw badRequest("INVALID_STATE", "No change waiting for this promoter");
+    if (decision === "approved") {
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (c.displayName !== undefined) patch.display_name = c.displayName;
+      if (c.registrationNumber !== undefined) patch.registration_number = c.registrationNumber || null;
+      if (c.payoutDetails !== undefined) patch.payout_details = c.payoutDetails;
+      check(await db().from("promoter_applications").update(patch).eq("user_id", userId), "Apply change");
+      if (c.displayName) {
+        for (const d of Object.values(state.drops)) {
+          if (d.promoterId === userId) {
+            d.promoterName = c.displayName;
+            touchDrop(d.id);
+          }
+        }
+      }
+    }
+    c.status = decision;
+    c.note = note;
+    c.reviewedAt = new Date().toISOString();
+    save();
+    return c;
   }
 
   // ---- Promoter applications ----

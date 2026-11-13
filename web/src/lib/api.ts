@@ -1,6 +1,8 @@
 import type {
   AdminUser,
   AlertItem,
+  BankTransfer,
+  ChangeRequest,
   CheckinResult,
   Demand,
   DoorStats,
@@ -68,7 +70,13 @@ export interface Api {
   alerts(): Promise<AlertItem[]>;
   readAlerts(): Promise<void>;
   ticketPass(eventId: string): Promise<TicketPass>;
+  updateProfile(body: { fullName?: string; phone?: string }): Promise<Me>;
+  updatePromoterDetails(body: PromoterDetailsInput): Promise<Me>;
+  transfers(): Promise<BankTransfer[]>;
+  deposit(body: { amountZar: number; method: "card" | "eft"; cardNumber?: string; bank?: string }): Promise<BankTransfer>;
+  cashOut(body: { amountZar: number; bank: string; accountNumber: string }): Promise<BankTransfer>;
   // Promoter
+  resubmitEvent(eventId: string): Promise<Drop>;
   myEvents(): Promise<Drop[]>;
   createEvent(body: CreateDropRequest): Promise<Drop>;
   openSales(eventId: string): Promise<Drop>;
@@ -81,14 +89,26 @@ export interface Api {
   checkIn(eventId: string, code: string): Promise<CheckinResult>;
   doorStats(eventId: string): Promise<DoorStats>;
   payouts(): Promise<PayoutSummary>;
-  requestPayout(): Promise<Payout>;
+  requestPayout(eventId: string): Promise<Payout>;
   // Admin
   applications(status?: ApplicationStatus): Promise<PromoterApplication[]>;
   review(userId: string, decision: ApplicationStatus, note?: string): Promise<PromoterApplication>;
   users(): Promise<AdminUser[]>;
   setRole(userId: string, role: Role): Promise<void>;
   allPayouts(): Promise<Payout[]>;
+  eventsInReview(): Promise<Drop[]>;
+  reviewEvent(eventId: string, decision: "approved" | "needs_more", note?: string): Promise<Drop>;
+  changeRequests(): Promise<ChangeRequest[]>;
+  reviewChange(userId: string, decision: "approved" | "rejected", note?: string): Promise<ChangeRequest>;
   markPayoutPaid(id: string): Promise<Payout>;
+}
+
+export interface PromoterDetailsInput {
+  displayName?: string;
+  registrationNumber?: string;
+  payoutDetails?: string;
+  socials?: string;
+  pastEvents?: string;
 }
 
 export interface CancelPreview {
@@ -160,6 +180,12 @@ const realApi: Api = {
   alerts: () => call("GET", "/me/alerts"),
   readAlerts: () => call("POST", "/me/alerts/read", {}),
   ticketPass: (eventId) => call("GET", `/me/events/${eventId}/pass`),
+  updateProfile: (body) => call("PATCH", "/me", body),
+  updatePromoterDetails: (body) => call("PATCH", "/me/promoter-details", body),
+  transfers: () => call("GET", "/me/transfers"),
+  deposit: (body) => call("POST", "/me/deposits", body),
+  cashOut: (body) => call("POST", "/me/cashouts", body),
+  resubmitEvent: (id) => call("POST", `/promoter/events/${id}/resubmit`, {}),
   myEvents: () => call("GET", "/promoter/events"),
   createEvent: (body) => call("POST", "/promoter/events", body),
   openSales: (id) => call("POST", `/promoter/events/${id}/open`, {}),
@@ -176,13 +202,17 @@ const realApi: Api = {
   checkIn: (id, code) => call("POST", `/promoter/events/${id}/checkin`, { code }),
   doorStats: (id) => call("GET", `/promoter/events/${id}/door`),
   payouts: () => call("GET", "/promoter/payouts"),
-  requestPayout: () => call("POST", "/promoter/payouts/request", {}),
+  requestPayout: (eventId) => call("POST", "/promoter/payouts/request", { eventId }),
   applications: (status) => call("GET", `/admin/applications${status ? `?status=${status}` : ""}`),
   review: (userId, decision, note) => call("POST", `/admin/applications/${userId}/review`, { decision, note }),
   users: () => call("GET", "/admin/users"),
   setRole: (userId, role) => call("POST", `/admin/users/${userId}/role`, { role }),
   allPayouts: () => call("GET", "/admin/payouts"),
   markPayoutPaid: (id) => call("POST", `/admin/payouts/${id}/paid`, {}),
+  eventsInReview: () => call("GET", "/admin/events/review"),
+  reviewEvent: (id, decision, note) => call("POST", `/admin/events/${id}/review`, { decision, note }),
+  changeRequests: () => call("GET", "/admin/change-requests"),
+  reviewChange: (userId, decision, note) => call("POST", `/admin/change-requests/${userId}/review`, { decision, note }),
 };
 
 export const api: Api = MOCK ? mockApi : realApi;

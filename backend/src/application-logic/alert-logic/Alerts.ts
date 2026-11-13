@@ -85,8 +85,20 @@ export class Alerts {
   // ---- Wishes ----
 
   private toWish(w: WishRecord): Wish {
-    const matches = Object.values(state.drops).filter((d) => live(d) && wishMatches(w, d)).length;
+    const found = Object.values(state.drops)
+      .filter((d) => live(d) && wishMatches(w, d))
+      .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    const matches = found.length;
     return {
+      events: found.map((d) => ({
+        id: d.id,
+        name: d.name,
+        venue: d.venue,
+        ...(d.city ? { city: d.city } : {}),
+        startsAt: d.startsAt,
+        priceZar: zar(d.priceZar),
+        state: d.state,
+      })),
       id: w.id,
       query: w.query,
       ...(w.city ? { city: w.city } : {}),
@@ -103,7 +115,6 @@ export class Alerts {
       .map((w) => this.toWish(w));
   }
 
-  // Saving a wish also tells the fan straight away about events that already fit it.
   addWish(fanId: string, input: { query: string; city?: string; maxZar?: number }): Wish {
     const record: WishRecord = {
       id: newId("wish"),
@@ -115,9 +126,7 @@ export class Alerts {
     };
     state.wishes[record.id] = record;
     save();
-    for (const d of Object.values(state.drops)) {
-      if (live(d) && wishMatches(record, d)) this.alertEvent(fanId, d, "new_event", "Already on Siyangena");
-    }
+    // Events that already fit show on the wishlist itself. Alerts are for what happens next.
     return this.toWish(record);
   }
 

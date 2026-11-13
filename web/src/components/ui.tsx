@@ -193,7 +193,7 @@ export function navFor(role: string | undefined, signedIn: boolean): NavItem[] {
   if (role === "promoter")
     return [
       { to: "/promoter", label: "Overview", end: true },
-      { to: "/promoter/create", label: "New event" },
+      { to: "/promoter/events", label: "Events" },
       { to: "/promoter/payouts", label: "Payouts" },
       { to: "/account", label: "Account" },
     ];
@@ -240,7 +240,7 @@ function moreFor(role: string | undefined): NavItem[] {
     ];
   if (role === "promoter")
     return [
-      { to: "/promoter/apply", label: "My promoter details" },
+      { to: "/promoter/create", label: "New event" },
       { to: "/events", label: "Browse events as a fan" },
       { to: "/account", label: "My account" },
     ];

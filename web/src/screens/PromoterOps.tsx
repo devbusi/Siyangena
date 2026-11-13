@@ -68,7 +68,10 @@ export function CancelEvent() {
                 </div>
               </div>
             )}
-            {!cancelled && (
+            {!cancelled && drop && (drop.state === "closed" || new Date(drop.startsAt).getTime() <= Date.now()) && (
+              <p className="callout">Sales are closed for this event, so it can't be cancelled here.</p>
+            )}
+            {!cancelled && drop && drop.state !== "closed" && new Date(drop.startsAt).getTime() > Date.now() && (
               <>
                 <p style={{ fontSize: "1.15rem", maxWidth: 640 }}>Every fan gets their money back automatically, straight to their wallet. You can't undo this.</p>
                 <div className="panel stack" style={{ gap: 8 }}>
@@ -281,7 +284,7 @@ export function DoorScanner() {
           setManual("");
         }}
       >
-        <input className="input" style={{ flex: 1 }} placeholder="Or paste the ticket code" value={manual} onChange={(e) => setManual(e.target.value)} aria-label="Ticket code" />
+        <input className="input" style={{ flex: 1 }} placeholder="Or type the code, e.g. K7Q4-M2PX" value={manual} onChange={(e) => setManual(e.target.value)} aria-label="Ticket code" />
         <Button type="submit" variant="ghost" className="btn-sm">
           Check
         </Button>
@@ -317,17 +320,20 @@ export function PromoterPayouts() {
   };
   useEffect(load, [tick]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function request() {
+  const [busyId, setBusyId] = useState("");
+  async function request(eventId: string) {
     setBusy(true);
+    setBusyId(eventId);
     setError("");
     try {
-      const p = await api.requestPayout();
-      setDone(`Requested ${rand(p.amountZar)}. Siyangena pays it to ${p.bank ?? "your bank"}, usually the next working day.`);
+      const p = await api.requestPayout(eventId);
+      setDone(`Requested ${rand(p.amountZar)} for ${p.eventName}. Siyangena pays it to ${p.bank ?? "your bank"}, usually the next working day.`);
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't request a payout");
     } finally {
       setBusy(false);
+      setBusyId("");
     }
   }
 
@@ -373,10 +379,12 @@ export function PromoterPayouts() {
                   <thead>
                     <tr>
                       <th>Event</th>
-                      <th>Ticket sales</th>
+                      <th>Sales</th>
                       <th>Resale fees</th>
                       <th>Refunded</th>
-                      <th>Status</th>
+                      <th>Paid or on its way</th>
+                      <th>Ready to pay</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -390,7 +398,15 @@ export function PromoterPayouts() {
                         <td className="num">{rand(e.salesZar)}</td>
                         <td className="num">{rand(e.feesZar)}</td>
                         <td className="num">{rand(e.refundedZar)}</td>
-                        <td>{e.state === "cancelled" ? "Cancelled" : e.held ? "Held until the event" : "Ready to pay"}</td>
+                        <td className="num">{rand(Number(e.paidZar) + Number(e.requestedZar))}</td>
+                        <td className="num">{e.held ? "Held until the event" : rand(e.availableZar)}</td>
+                        <td>
+                          {!e.held && Number(e.availableZar) > 0 && (
+                            <Button className="btn-sm" disabled={busy} onClick={() => request(e.eventId)}>
+                              {busyId === e.eventId ? "Requesting" : "Request payout"}
+                            </Button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -399,15 +415,12 @@ export function PromoterPayouts() {
             </div>
             <aside className="desk-aside stack">
               <div className="panel stack" style={{ background: "var(--lilac)", gap: 8 }}>
-                <h2>Next payout</h2>
+                <h2>Ready to pay</h2>
                 <p className="stat-value num" style={{ fontSize: "3.4rem" }}>
                   {rand(s.availableZar)}
                 </p>
-                <p>{s.bank ? `To ${s.bank}.` : "Add your bank details in your promoter details."}</p>
+                <p>{s.bank ? `Paid to ${s.bank}.` : "Add your bank details in your account."} Request each event's payout from the table.</p>
                 {Number(s.requestedZar) > 0 && <p style={{ fontWeight: 700 }}>{rand(s.requestedZar)} already on its way.</p>}
-                <Button disabled={busy || Number(s.availableZar) <= 0} onClick={request}>
-                  {busy ? "Requesting" : "Request payout"}
-                </Button>
                 {done && <p style={{ fontWeight: 700 }}>{done}</p>}
                 {error && <p style={{ fontWeight: 700 }}>{error}</p>}
               </div>
@@ -425,7 +438,8 @@ export function PromoterPayouts() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Date</th>
+                    <th>Requested</th>
+                    <th>Event</th>
                     <th>Amount</th>
                     <th>To</th>
                     <th>Status</th>
@@ -435,9 +449,26 @@ export function PromoterPayouts() {
                   {s.history.map((p) => (
                     <tr key={p.id}>
                       <td>{when(p.createdAt)}</td>
+                      <td>{p.eventName}</td>
                       <td className="num">{rand(p.amountZar)}</td>
                       <td>{p.bank ?? "Your bank"}</td>
-                      <td>{p.status === "paid" ? `Paid ${when(p.paidAt)}` : "On its way"}</td>
+                      <td>
+                        {p.status === "paid" ? (
+                          <>
+                            Paid {when(p.paidAt)}, ref {p.reference}
+                            {p.explorerUrl && (
+                              <>
+                                {" "}
+                                <a href={p.explorerUrl} target="_blank" rel="noreferrer">
+                                  Ledger receipt
+                                </a>
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          "On its way"
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -459,11 +490,15 @@ export function AdminPayouts() {
   };
   useEffect(load, []);
 
+  const [error, setError] = useState("");
   async function paid(id: string) {
     setBusy(id);
+    setError("");
     try {
       await api.markPayoutPaid(id);
       load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't send it");
     } finally {
       setBusy("");
     }
@@ -476,7 +511,7 @@ export function AdminPayouts() {
       <Enter>
         <h1 style={{ margin: "10px 0 6px" }}>Payouts</h1>
         <p className="muted" style={{ marginBottom: 18 }}>
-          Promoters request a payout. Pay it by bank transfer, then mark it paid here so they can see it.
+          Promoters request a payout per event. Send bank transfer moves the money from the platform wallet to the bank wallet on the ledger and records the bank transfer reference for the promoter.
         </p>
       </Enter>
       {!list ? (
@@ -486,11 +521,13 @@ export function AdminPayouts() {
       ) : (
         <div className="panel" style={{ overflowX: "auto" }}>
           <p style={{ fontWeight: 800, marginBottom: 8 }}>{waiting.length ? `${waiting.length} waiting to be paid` : "All paid"}</p>
+          {error && <p className="callout callout-blocked">{error}</p>}
           <table className="table">
             <thead>
               <tr>
                 <th>Requested</th>
                 <th>Promoter</th>
+                <th>Event</th>
                 <th>Amount</th>
                 <th>To</th>
                 <th>Status</th>
@@ -501,14 +538,25 @@ export function AdminPayouts() {
                 <tr key={p.id}>
                   <td>{when(p.createdAt)}</td>
                   <td>{p.promoterName ?? p.promoterId}</td>
+                  <td>{p.eventName}</td>
                   <td className="num">{rand(p.amountZar)}</td>
                   <td>{p.bank ?? "No bank details"}</td>
                   <td>
                     {p.status === "paid" ? (
-                      `Paid ${when(p.paidAt)}`
+                      <>
+                        Paid {when(p.paidAt)}, ref {p.reference}
+                        {p.explorerUrl && (
+                          <>
+                            {" "}
+                            <a href={p.explorerUrl} target="_blank" rel="noreferrer">
+                              Ledger receipt
+                            </a>
+                          </>
+                        )}
+                      </>
                     ) : (
                       <Button className="btn-sm" disabled={busy === p.id} onClick={() => paid(p.id)}>
-                        Mark paid
+                        {busy === p.id ? "Sending" : "Send bank transfer"}
                       </Button>
                     )}
                   </td>

@@ -29,6 +29,8 @@ export type ErrorCode =
   | "VALIDATION_ERROR"
   | "UNAUTHORIZED"
   | "LEDGER_ERROR"
+  | "DECLINED"
+  | "IN_REVIEW"
   | "INTERNAL_ERROR";
 
 export interface ApiFailure {
@@ -72,6 +74,15 @@ export interface Drop {
   promoterName?: string;
   // Set when the promoter cancels: what fans are told, and how the refunds are going.
   cancel?: CancelProgress;
+  // Every new event is checked by an admin before it can go on sale.
+  review?: EventReview;
+}
+
+export interface EventReview {
+  status: "pending" | "approved" | "needs_more";
+  note?: string;
+  submittedAt: string;
+  reviewedAt?: string;
 }
 
 export interface CancelProgress {
@@ -360,6 +371,22 @@ export interface Me {
   walletReady: boolean;
   walletAddress?: string;
   application?: PromoterApplication;
+  changeRequest?: ChangeRequest;
+}
+
+// A promoter asking to change details an admin checked: their public name,
+// registration number or bank account. Nothing changes until an admin approves.
+export interface ChangeRequest {
+  userId: string;
+  displayName?: string;
+  registrationNumber?: string;
+  payoutDetails?: string;
+  status: "pending" | "approved" | "rejected";
+  note?: string;
+  createdAt: string;
+  reviewedAt?: string;
+  email?: string;
+  current?: { displayName?: string; registrationNumber?: string; payoutDetails?: string };
 }
 
 export interface AdminUser {
@@ -382,6 +409,17 @@ export interface Wish {
   maxZar?: string;
   createdAt: string;
   matches: number; // events on Siyangena that match right now
+  events: WishMatch[];
+}
+
+export interface WishMatch {
+  id: string;
+  name: string;
+  venue: string;
+  city?: string;
+  startsAt: string;
+  priceZar: string;
+  state: DropState;
 }
 
 export type AlertKind = "new_event" | "sale_open" | "resale" | "tickets" | "sold" | "limit" | "cancelled";
@@ -420,6 +458,7 @@ export interface DoorStats {
 
 export interface TicketPass {
   code: string;
+  short: string; // the same pass as a code staff can type, e.g. K7Q4-M2PX
   expiresAt: string;
 }
 
@@ -429,11 +468,32 @@ export interface Payout {
   id: string;
   promoterId: string;
   promoterName?: string;
+  eventId: string;
+  eventName: string;
   amountZar: string;
   status: PayoutStatus;
   bank?: string;
   createdAt: string;
   paidAt?: string;
+  reference?: string; // the (simulated) bank transfer reference
+  txHash?: string; // the ledger move from the platform wallet to the bank wallet
+  explorerUrl?: string;
+}
+
+// Money in and out of Siyangena through the test payment gateway. Every one is also a
+// real payment on the ledger: bank wallet to the fan's wallet, or back.
+export interface BankTransfer {
+  id: string;
+  kind: "deposit" | "cashout";
+  amountZar: string;
+  method: string; // "Visa ending 4242", "Instant EFT, FNB", "FNB, account ending 4417"
+  status: "processing" | "completed" | "failed";
+  reference: string;
+  createdAt: string;
+  completedAt?: string;
+  txHash?: string;
+  explorerUrl?: string;
+  failure?: string;
 }
 
 export interface PayoutEventLine {
@@ -445,6 +505,10 @@ export interface PayoutEventLine {
   feesZar: string;
   refundedZar: string;
   held: boolean; // independent promoters are paid the morning after the event
+  netZar: string;
+  requestedZar: string;
+  paidZar: string;
+  availableZar: string;
 }
 
 export interface PayoutSummary {

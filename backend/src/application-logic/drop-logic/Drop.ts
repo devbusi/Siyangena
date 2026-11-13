@@ -9,6 +9,9 @@ import { alerts } from "../alert-logic/Alerts";
 
 const events = new Events();
 
+// Events made before reviews existed, or by the scripts, count as approved.
+export const isApproved = (d: DropRecord) => !d.review || d.review.status === "approved";
+
 // An event ("drop" in the code). Each event is its own MPT issuance, created by the
 // platform wallet on behalf of the promoter, so tickets from different events never mix.
 export class Drop {
@@ -34,6 +37,7 @@ export class Drop {
       ...(record.promoterId ? { promoterId: record.promoterId } : {}),
       ...(record.promoterName ? { promoterName: record.promoterName } : {}),
       ...(record.cancel ? { cancel: record.cancel } : {}),
+      ...(record.review ? { review: record.review } : {}),
     };
   }
 
@@ -60,11 +64,12 @@ export class Drop {
     return this.toView(this.getRecord(eventId));
   }
 
-  // The public list hides cancelled events. Promoters and admins still see theirs.
+  // The public list hides cancelled events and events still in review. Promoters and admins see theirs.
   list(filter?: { promoterId?: string; includeCancelled?: boolean }): DropView[] {
+    const forPublic = !filter?.includeCancelled;
     return Object.values(state.drops)
       .filter((d) => !filter?.promoterId || d.promoterId === filter.promoterId)
-      .filter((d) => filter?.includeCancelled || d.state !== "cancelled")
+      .filter((d) => !forPublic || (d.state !== "cancelled" && isApproved(d)))
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
       .map((d) => this.toView(d));
   }
@@ -131,16 +136,47 @@ export class Drop {
       issuanceId,
       issuanceTx: txHash,
       createdAt: nowIso(),
+      // A promoter's event waits for an admin. The scripts' events go straight up.
+      ...(promoter ? { review: { status: "pending" as const, submittedAt: nowIso() } } : {}),
     };
     touchDrop(id);
-    alerts.onNewEvent(state.drops[id]);
+    if (!promoter) alerts.onNewEvent(state.drops[id]);
     return this.toView(state.drops[id]);
+  }
+
+  // ---- Admin review of new events ----
+
+  inReview(): DropView[] {
+    return Object.values(state.drops)
+      .filter((d) => d.review && d.review.status !== "approved" && d.state !== "cancelled")
+      .sort((a, b) => (a.review!.submittedAt ?? "").localeCompare(b.review!.submittedAt ?? ""))
+      .map((d) => this.toView(d));
+  }
+
+  reviewEvent(eventId: string, decision: "approved" | "needs_more", note?: string): DropView {
+    const drop = this.getRecord(eventId);
+    drop.review = { status: decision, ...(note ? { note } : {}), submittedAt: drop.review?.submittedAt ?? nowIso(), reviewedAt: nowIso() };
+    touchDrop(drop.id);
+    // Fans who wished for something like this hear about it once it's approved.
+    if (decision === "approved") alerts.onNewEvent(drop);
+    return this.toView(drop);
+  }
+
+  // The promoter fixed what was asked: back into the queue.
+  resubmit(eventId: string): DropView {
+    const drop = this.getRecord(eventId);
+    if (drop.review?.status === "needs_more") {
+      drop.review = { status: "pending", submittedAt: nowIso() };
+      touchDrop(drop.id);
+    }
+    return this.toView(drop);
   }
 
   openDrop(eventId?: string): DropView {
     const drop = this.getRecord(eventId);
     if (drop.state === "open") return this.toView(drop);
     if (drop.state === "cancelled") throw conflict("INVALID_STATE", "This event was cancelled");
+    if (!isApproved(drop)) throw conflict("IN_REVIEW", "This event is still being reviewed. Sales can open once it's approved.");
     if (drop.sold >= drop.supply) throw conflict("SOLD_OUT", "This event is sold out");
     drop.state = "open";
     touchDrop(drop.id);

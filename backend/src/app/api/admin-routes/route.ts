@@ -1,11 +1,14 @@
 import { Router, Request, Response } from "express";
 import type { ApplicationStatus } from "@drop/shared";
 import { accounts } from "../../../application-logic/account-logic/Accounts";
-import { ReviewDto, RoleDto } from "../../../dto/account.dto";
+import { ChangeReviewDto, ReviewDto, RoleDto } from "../../../dto/account.dto";
 import { validate } from "../../../middleware/validate";
 import { forgetUser, requireRole } from "../../../middleware/auth";
-import { sendError } from "../../../lib/utils/errors";
+import { ApiError, sendError } from "../../../lib/utils/errors";
 import { Payouts } from "../../../application-logic/payout-logic/Payouts";
+import { Drop } from "../../../application-logic/drop-logic/Drop";
+
+const drops = new Drop();
 
 const payouts = new Payouts();
 
@@ -53,6 +56,43 @@ router.post("/users/:userId/role", validate(RoleDto), async (req: Request, res: 
   }
 });
 
+router.get("/events/review", async (_req: Request, res: Response) => {
+  try {
+    res.json({ success: true, data: drops.inReview() });
+  } catch (error) {
+    sendError(res, error, "Failed to load events to review");
+  }
+});
+
+router.post("/events/:eventId/review", async (req: Request, res: Response) => {
+  try {
+    const decision = req.body?.decision === "approved" ? "approved" : req.body?.decision === "needs_more" ? "needs_more" : null;
+    if (!decision) throw new ApiError(400, "VALIDATION_ERROR", "Approve it or ask for changes");
+    const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 300) : undefined;
+    if (decision === "needs_more" && !note) throw new ApiError(400, "VALIDATION_ERROR", "Say what needs to change");
+    res.json({ success: true, data: drops.reviewEvent(req.params.eventId as string, decision, note) });
+  } catch (error) {
+    sendError(res, error, "Failed to review the event");
+  }
+});
+
+router.get("/change-requests", async (_req: Request, res: Response) => {
+  try {
+    res.json({ success: true, data: await accounts.listChangeRequests() });
+  } catch (error) {
+    sendError(res, error, "Failed to load change requests");
+  }
+});
+
+router.post("/change-requests/:userId/review", validate(ChangeReviewDto), async (req: Request, res: Response) => {
+  try {
+    const { decision, note } = req.body as { decision: "approved" | "rejected"; note?: string };
+    res.json({ success: true, data: await accounts.reviewChangeRequest(req.params.userId as string, decision, note) });
+  } catch (error) {
+    sendError(res, error, "Failed to review the change");
+  }
+});
+
 router.get("/payouts", async (_req: Request, res: Response) => {
   try {
     res.json({ success: true, data: payouts.all() });
@@ -63,7 +103,7 @@ router.get("/payouts", async (_req: Request, res: Response) => {
 
 router.post("/payouts/:payoutId/paid", async (req: Request, res: Response) => {
   try {
-    res.json({ success: true, data: payouts.markPaid(req.params.payoutId as string) });
+    res.json({ success: true, data: await payouts.markPaid(req.params.payoutId as string) });
   } catch (error) {
     sendError(res, error, "Failed to mark the payout paid");
   }

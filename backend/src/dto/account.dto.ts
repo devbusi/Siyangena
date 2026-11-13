@@ -42,4 +42,35 @@ export const CancelDto = z.object({
 });
 export type CancelDto = z.infer<typeof CancelDto>;
 
-export const CheckinDto = z.object({ code: z.string().trim().min(10).max(400) });
+export const CheckinDto = z.object({ code: z.string().trim().min(8).max(400) });
+
+export const ProfileDto = z.object({
+  fullName: z.string().trim().min(2).max(80).optional(),
+  phone: z.string().trim().max(20).optional(),
+});
+
+export const PromoterDetailsDto = z.object({
+  displayName: z.string().trim().min(2).max(80).optional(),
+  registrationNumber: z.string().trim().max(40).optional(),
+  payoutDetails: z.string().trim().min(3).max(200).optional(),
+  socials: z.string().trim().max(200).optional(),
+  pastEvents: z.string().trim().max(500).optional(),
+});
+
+export const ChangeReviewDto = z.object({
+  decision: z.enum(["approved", "rejected"]),
+  note: z.string().trim().max(300).optional(),
+});
+
+export const DepositDto = z.object({
+  amountZar: z.coerce.number().positive().max(5000),
+  method: z.enum(["card", "eft"]),
+  cardNumber: z.string().trim().max(30).optional(),
+  bank: z.string().trim().max(40).optional(),
+});
+
+export const CashOutDto = z.object({
+  amountZar: z.coerce.number().positive().max(20000),
+  bank: z.string().trim().min(2).max(40),
+  accountNumber: z.string().trim().min(6).max(20),
+});

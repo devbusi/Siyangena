@@ -11,6 +11,7 @@ import { xrplMpt } from "../../xrpl/xrpl.mpt";
 import { xrplPayments } from "../../xrpl/xrpl.payments";
 import { xrplClient } from "../../xrpl/xrpl.client";
 import { xrplExplorer } from "../../xrpl/xrpl.explorer";
+import { xrplConfig } from "../../xrpl/xrpl.config";
 import { accounts } from "../account-logic/Accounts";
 
 // Demo cast from docs/PLAN.md section 2, with seeds in .env. Each has an agent wallet
@@ -214,9 +215,11 @@ export class Fans {
       safe("XRP", xrplClient.getXrpBalance(ctx.agent.address), 0),
       safe("ticket", this.getTicketCount(fanId, eventId), 0),
     ]);
+    // On XRP the ledger locks a small reserve in every wallet: don't count it as spendable.
+    const spend = xrplConfig.settleAsset === "XRP" ? String(Math.max(0, Number(allowance) - 3).toFixed(6)) : allowance;
     return {
-      allowanceRlusd: allowance,
-      allowanceZar: settleToZar(allowance),
+      allowanceRlusd: spend,
+      allowanceZar: settleToZar(spend),
       xrp: String(xrp),
       tickets,
     };

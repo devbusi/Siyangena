@@ -13,6 +13,20 @@ const fanService = new Fans();
 
 // The code on a ticket changes every minute, so a screenshot stops working fast.
 const PASS_TTL_MS = 60_000;
+// Short codes staff can type in, mapped to the full pass while it's fresh.
+const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O or 1/I mix-ups
+const shortCodes = new Map<string, { code: string; exp: number }>();
+function makeShort(): string {
+  let out = "";
+  const bytes = crypto.randomBytes(8);
+  for (let i = 0; i < 8; i++) out += ALPHABET[bytes[i] % ALPHABET.length];
+  return `${out.slice(0, 4)}-${out.slice(4)}`;
+}
+function sweep() {
+  const now = Date.now();
+  for (const [k, v] of shortCodes) if (v.exp < now) shortCodes.delete(k);
+}
+
 const SECRET = process.env.PASS_SECRET || process.env.WALLET_ENCRYPTION_KEY || process.env.HUMAN_API_KEY || crypto.randomBytes(32).toString("hex");
 
 function sign(payload: string) {
@@ -41,7 +55,12 @@ export class Door {
     if (held < 1) throw forbidden("NO_TICKET", "You don't hold a ticket for this event");
     const exp = Date.now() + PASS_TTL_MS;
     const payload = `${drop.id}.${ctx.agent.address}.${exp}`;
-    return { code: `S1.${payload}.${sign(payload)}`, expiresAt: new Date(exp).toISOString() };
+    const code = `S1.${payload}.${sign(payload)}`;
+    sweep();
+    let short = makeShort();
+    while (shortCodes.has(short)) short = makeShort();
+    shortCodes.set(short, { code, exp });
+    return { code, short, expiresAt: new Date(exp).toISOString() };
   }
 
   private turnAway(eventId: string, result: CheckinResult): CheckinResult {
@@ -54,6 +73,13 @@ export class Door {
   // more tickets on the ledger than it has already used to get in.
   async checkIn(eventId: string, code: string): Promise<CheckinResult> {
     const drop = dropService.getRecord(eventId);
+    // A typed short code stands in for the full pass it was issued with.
+    const typed = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (typed.length === 8 && !code.includes(".")) {
+      const hit = shortCodes.get(`${typed.slice(0, 4)}-${typed.slice(4)}`);
+      if (!hit) return this.turnAway(eventId, { ok: false, reason: "expired", message: "That code isn't valid any more. Ask them to open the ticket in the app." });
+      code = hit.code;
+    }
     const parts = code.trim().split(".");
     if (parts.length !== 5 || parts[0] !== "S1") return this.turnAway(eventId, { ok: false, reason: "bad_code", message: "That isn't a Siyangena ticket" });
     const [, codeEvent, address, expRaw, sig] = parts;

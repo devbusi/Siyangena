@@ -8,6 +8,7 @@ import { Button } from "./ui";
 // 45 seconds, so a screenshot stops working within a minute.
 export function DoorPass({ eventId, name, onClose }: { eventId: string; name: string; onClose: () => void }) {
   const [img, setImg] = useState("");
+  const [short, setShort] = useState("");
   const [error, setError] = useState("");
   const [left, setLeft] = useState(0);
 
@@ -21,6 +22,7 @@ export function DoorPass({ eventId, name, onClose }: { eventId: string; name: st
         const url = await QRCode.toDataURL(pass.code, { margin: 1, width: 520, errorCorrectionLevel: "M" });
         if (!stop) {
           setImg(url);
+          setShort(pass.short);
           setError("");
         }
       } catch (e) {
@@ -55,6 +57,14 @@ export function DoorPass({ eventId, name, onClose }: { eventId: string; name: st
         <div style={{ width: "min(78vw, 300px)", aspectRatio: "1", border: "3px solid #000", borderRadius: 22, background: "#fff", display: "grid", placeItems: "center", overflow: "hidden" }}>
           {img ? <img src={img} alt="Ticket QR code" style={{ width: "92%", height: "92%" }} /> : <p className="muted">{error || "Loading"}</p>}
         </div>
+        {short && (
+          <div className="stack" style={{ gap: 2 }}>
+            <p className="faint">If the scanner can't read it, give them this code</p>
+            <p className="num" style={{ fontWeight: 900, fontSize: "2rem", letterSpacing: "0.12em" }}>
+              {short}
+            </p>
+          </div>
+        )}
         {img && <p style={{ fontWeight: 800 }}>{left > 0 ? `New code in ${left}s. Screenshots won't work.` : "Refreshing"}</p>}
         <Button variant="ghost" block onClick={onClose}>
           Done

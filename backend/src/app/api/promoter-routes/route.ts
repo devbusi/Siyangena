@@ -92,6 +92,15 @@ router.patch("/events/:eventId", validate(UpdateDropDto), async (req: Request, r
   }
 });
 
+router.post("/events/:eventId/resubmit", async (req: Request, res: Response) => {
+  try {
+    assertCanManage(req.params.eventId as string, who(req));
+    res.json({ success: true, data: dropService.resubmit(req.params.eventId as string) });
+  } catch (error) {
+    sendError(res, error, "Failed to send the event for review");
+  }
+});
+
 router.get("/events/:eventId/stats", async (req: Request, res: Response) => {
   try {
     dropService.assertOwner(req.params.eventId as string, who(req));
@@ -168,7 +177,9 @@ router.get("/payouts", async (req: Request, res: Response) => {
 router.post("/payouts/request", async (req: Request, res: Response) => {
   try {
     const w = who(req);
-    res.status(201).json({ success: true, data: await payouts.request(w.id, w.name) });
+    const eventId = String(req.body?.eventId ?? "");
+    if (!eventId) throw new ApiError(400, "VALIDATION_ERROR", "Choose the event to pay out");
+    res.status(201).json({ success: true, data: await payouts.request(w.id, w.name, eventId) });
   } catch (error) {
     sendError(res, error, "Failed to request a payout");
   }

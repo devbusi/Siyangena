@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import type { AlertItem, AlertKind, Wish } from "@drop/shared";
 import { Button, Enter, TopBar } from "../components/ui";
 import { api } from "../lib/api";
-import { rand } from "../lib/format";
+import { dateLong, rand } from "../lib/format";
 import { useApp } from "../lib/store";
 import { useAuth } from "../lib/auth";
 
@@ -166,7 +166,7 @@ export function Wishlist() {
       <TopBar />
       <Enter>
         <h1 style={{ margin: "10px 0 8px" }}>Who do you want to see?</h1>
-        <p className="muted">We'll tell you the moment they're on Siyangena, and again when sales open. Then buy, or send your agent in.</p>
+        <p className="muted">Events that fit show here straight away. When a new one is listed, or sales open, you get an alert.</p>
       </Enter>
       <Enter delay={0.06}>
         <form className="panel stack" style={{ marginTop: 18 }} onSubmit={add}>
@@ -190,13 +190,9 @@ export function Wishlist() {
           {error && <p style={{ fontWeight: 700 }}>{error}</p>}
           {saved && (
             <p style={{ fontWeight: 700 }}>
-              {saved.matches > 0 ? (
-                <>
-                  {saved.matches === 1 ? "1 event fits already." : `${saved.matches} events fit already.`} <Link to="/alerts">See it in your alerts</Link>.
-                </>
-              ) : (
-                "Saved. Nothing fits yet, we'll tell you when it does."
-              )}
+              {saved.matches > 0
+                ? `Saved. ${saved.matches === 1 ? "1 event fits" : `${saved.matches} events fit`} already, below.`
+                : "Saved. Nothing fits yet. We'll alert you when it does."}
             </p>
           )}
         </form>
@@ -214,12 +210,28 @@ export function Wishlist() {
               {w.city || "Anywhere"}
               {w.maxZar ? `, up to ${rand(w.maxZar)} a ticket` : ""}
             </p>
-            <div className="row" style={{ gap: 8 }}>
-              {w.matches > 0 && (
-                <Button className="btn-sm" onClick={() => navigate("/alerts")}>
-                  See what fits
-                </Button>
-              )}
+            {w.events.map((e) => (
+              <div key={e.id} className="stack" style={{ gap: 8, borderTop: "2px dashed #000", paddingTop: 10, marginTop: 4 }}>
+                <div className="row" style={{ alignItems: "flex-start", gap: 10 }}>
+                  <Link to={`/events/${e.id}`} style={{ fontWeight: 800, color: "inherit" }}>
+                    {e.name}
+                  </Link>
+                  <span className="pill">{e.state === "open" ? "On sale" : "Soon"}</span>
+                </div>
+                <p className="faint">
+                  {e.city || e.venue}, {dateLong(e.startsAt)}, {rand(e.priceZar)}
+                </p>
+                <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-start" }}>
+                  <Button className="btn-sm" onClick={() => navigate(`/events/${e.id}/buy`)}>
+                    Buy tickets
+                  </Button>
+                  <Button variant="lilac" className="btn-sm" onClick={() => navigate(`/events/${e.id}/agent`)}>
+                    Send my agent in
+                  </Button>
+                </div>
+              </div>
+            ))}
+            <div className="row" style={{ gap: 8, justifyContent: "flex-start" }}>
               <Button variant="ghost" className="btn-sm" onClick={() => remove(w.id)}>
                 Remove
               </Button>

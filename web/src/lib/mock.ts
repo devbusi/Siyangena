@@ -2,6 +2,8 @@
 import type {
   AdminUser,
   AlertItem,
+  BankTransfer,
+  ChangeRequest,
   Payout,
   Wish,
   Drop,
@@ -28,6 +30,7 @@ export interface MockUser {
   email: string;
   fullName: string;
   role: Role;
+  phone?: string;
 }
 
 const PEOPLE: Record<string, MockUser> = {
@@ -117,14 +120,28 @@ const applications: Record<string, PromoterApplication> = {
 };
 const purchases: Record<string, string> = {};
 const wishes: (Wish & { fanId: string })[] = [
-  { id: "wish_seed1", fanId: "u_seed1", query: "Amapiano", city: "Cape Town", maxZar: "1500", createdAt: "2026-11-10T10:00:00Z", matches: 0 },
-  { id: "wish_seed2", fanId: "u_seed2", query: "Sunset sessions", city: "Cape Town", createdAt: "2026-11-11T10:00:00Z", matches: 0 },
-  { id: "wish_seed3", fanId: "u_seed3", query: "Rooftop", city: "Johannesburg", maxZar: "400", createdAt: "2026-11-12T10:00:00Z", matches: 0 },
+  { id: "wish_seed1", fanId: "u_seed1", query: "Amapiano", city: "Cape Town", maxZar: "1500", createdAt: "2026-11-10T10:00:00Z", matches: 0, events: [] },
+  { id: "wish_seed2", fanId: "u_seed2", query: "Sunset sessions", city: "Cape Town", createdAt: "2026-11-11T10:00:00Z", matches: 0, events: [] },
+  { id: "wish_seed3", fanId: "u_seed3", query: "Rooftop", city: "Johannesburg", maxZar: "400", createdAt: "2026-11-12T10:00:00Z", matches: 0, events: [] },
 ];
+
+function wishView(w: Wish & { fanId: string }): Wish {
+  const { fanId: _f, ...rest } = w;
+  const found = drops.filter((d) => (d.state === "open" || d.state === "scheduled") && wishFits(w, d));
+  return {
+    ...rest,
+    matches: found.length,
+    events: found.map((d) => ({ id: d.id, name: d.name, venue: d.venue, ...(d.city ? { city: d.city } : {}), startsAt: d.startsAt, priceZar: d.priceZar, state: d.state })),
+  };
+}
 const alertsBy: Record<string, AlertItem[]> = {};
 const checkins: Record<string, Record<string, number>> = {};
 const turned: Record<string, number> = {};
 const payoutList: Payout[] = [];
+const mockShort: Record<string, string> = {};
+const transfersBy: Record<string, BankTransfer[]> = {};
+const changes: Record<string, ChangeRequest> = {};
+const ref = (p: string) => `${p}-${Math.random().toString(16).slice(2, 8).toUpperCase()}`;
 
 function pushAlert(fanId: string, a: Omit<AlertItem, "id" | "at" | "read">) {
   (alertsBy[fanId] ??= []).push({ ...a, id: `alert_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, at: new Date().toISOString(), read: false });
@@ -166,6 +183,8 @@ function meOf(u: MockUser): Me {
     walletReady: a.walletReady,
     ...(a.walletReady ? { walletAddress: "rDemoWa11etXXXXXXXXXXXXXXXXXXXX" } : {}),
     ...(applications[u.id] ? { application: applications[u.id] } : {}),
+    ...(u.phone ? { phone: u.phone } : {}),
+    ...(changes[u.id] ? { changeRequest: changes[u.id] } : {}),
   };
 }
 
@@ -356,22 +375,11 @@ export const mockApi: Api = {
     emit("resale.settled", { fanId: u.id, eventId: l.eventId });
     return { status: "settled" };
   },
-  wishes: async () =>
-    wishes
-      .filter((w) => w.fanId === who().id)
-      .map(({ fanId: _f, ...w }) => ({ ...w, matches: drops.filter((d) => (d.state === "open" || d.state === "scheduled") && wishFits(w, d)).length })),
+  wishes: async () => wishes.filter((w) => w.fanId === who().id).map(wishView),
   addWish: async (body) => {
-    const w = { id: `wish_${Date.now()}`, fanId: who().id, query: body.query, ...(body.city ? { city: body.city } : {}), ...(body.maxZar ? { maxZar: String(body.maxZar) } : {}), createdAt: new Date().toISOString(), matches: 0 };
+    const w = { id: `wish_${Date.now()}`, fanId: who().id, query: body.query, ...(body.city ? { city: body.city } : {}), ...(body.maxZar ? { maxZar: String(body.maxZar) } : {}), createdAt: new Date().toISOString(), matches: 0, events: [] };
     wishes.push(w);
-    for (const d of drops) {
-      if ((d.state === "open" || d.state === "scheduled") && wishFits(w, d)) {
-        w.matches += 1;
-        pushAlert(w.fanId, { kind: "new_event", title: `Already on Siyangena: ${d.name}`, body: `${d.city ?? d.venue}, from ${rand(d.priceZar)}. ${d.state === "open" ? "On sale now." : "Sales open soon."}`, eventId: d.id });
-      }
-    }
-    emit("agent.action", { fanId: w.fanId, detail: "wish saved" });
-    const { fanId: _f, ...view } = w;
-    return view;
+    return wishView(w);
   },
   removeWish: async (id) => {
     const i = wishes.findIndex((w) => w.id === id && w.fanId === who().id);
@@ -384,7 +392,10 @@ export const mockApi: Api = {
   ticketPass: async (eventId) => {
     if ((acct(who().id).tickets[eventId] ?? 0) < 1) throw new Error("You don't hold a ticket for this event");
     const exp = Date.now() + 60_000;
-    return { code: `S1.${eventId}.${who().id}.${exp}.${"m".repeat(22)}`, expiresAt: new Date(exp).toISOString() };
+    const code = `S1.${eventId}.${who().id}.${exp}.${"m".repeat(22)}`;
+    const short = Math.random().toString(36).slice(2, 10).toUpperCase().replace(/(.{4})/, "$1-");
+    mockShort[short] = code;
+    return { code, short, expiresAt: new Date(exp).toISOString() };
   },
   myEvents: async () => {
     const u = who();
@@ -402,6 +413,7 @@ export const mockApi: Api = {
       resaleCapZar: String(body.resaleCapZar),
       promoterId: u.id,
       promoterName: applications[u.id]?.displayName ?? u.fullName,
+      review: { status: "pending", submittedAt: new Date().toISOString() },
     });
     drops.push(d);
     return { ...d };
@@ -409,6 +421,7 @@ export const mockApi: Api = {
   openSales: async (id) => {
     const d = drop(id);
     if (d.promoterId !== who().id) throw new Error("This isn't your event");
+    if (d.review && d.review.status !== "approved") throw new Error("This event is still being reviewed. Sales can open once it's approved.");
     d.state = "open";
     emit("drop.opened", { eventId: id });
     return { ...d };
@@ -452,6 +465,7 @@ export const mockApi: Api = {
   cancelEvent: async (id, reason) => {
     const d = drop(id);
     if (d.promoterId !== who().id) throw new Error("This isn't your event");
+    if (d.state === "closed" || d.state === "cancelled") throw new Error("Sales are closed for this event, so it can't be cancelled here");
     const holders = Object.entries(accounts).filter(([, a]) => (a.tickets[id] ?? 0) > 0);
     const total = holders.reduce((n, [, a]) => n + (a.tickets[id] ?? 0) * Number(d.priceZar), 0);
     d.state = "cancelled";
@@ -471,8 +485,10 @@ export const mockApi: Api = {
     })();
     return { ...d };
   },
-  checkIn: async (id, code) => {
+  checkIn: async (id, raw) => {
     const d = drop(id);
+    const typed = raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const code = !raw.includes(".") && typed.length === 8 ? mockShort[`${typed.slice(0, 4)}-${typed.slice(4)}`] ?? "" : raw;
     const parts = code.trim().split(".");
     const bad = (reason: "bad_code" | "wrong_event" | "cancelled" | "expired" | "used" | "no_ticket", message: string) => {
       turned[id] = (turned[id] ?? 0) + 1;
@@ -498,47 +514,133 @@ export const mockApi: Api = {
   payouts: async () => {
     const u = who();
     const mine = drops.filter((d) => d.promoterId === u.id);
+    const history = payoutList.filter((p) => p.promoterId === u.id);
     const lines = mine.map((d) => {
       const st = statsFor(d.id);
       const sales = Number(st.revenueRlusd) * FX;
       const fees = Number(st.feesRlusd) * FX;
       const refunded = Number(d.cancel?.refundedZar ?? 0);
       const held = applications[u.id]?.kind !== "business" && d.state !== "cancelled" && new Date(d.startsAt).getTime() + 864e5 > Date.now();
-      return { eventId: d.id, name: d.name, startsAt: d.startsAt, state: d.state, salesZar: sales.toFixed(2), feesZar: fees.toFixed(2), refundedZar: refunded.toFixed(2), held };
+      const net = Math.max(0, sales + fees - refunded);
+      const paid = history.filter((p) => p.eventId === d.id && p.status === "paid").reduce((n, p) => n + Number(p.amountZar), 0);
+      const requested = history.filter((p) => p.eventId === d.id && p.status === "requested").reduce((n, p) => n + Number(p.amountZar), 0);
+      const available = held ? 0 : Math.max(0, net - paid - requested);
+      return { eventId: d.id, name: d.name, startsAt: d.startsAt, state: d.state, salesZar: sales.toFixed(2), feesZar: fees.toFixed(2), refundedZar: refunded.toFixed(2), held, netZar: net.toFixed(2), requestedZar: requested.toFixed(2), paidZar: paid.toFixed(2), availableZar: available.toFixed(2) };
     });
-    const net = (l: (typeof lines)[number]) => Math.max(0, Number(l.salesZar) + Number(l.feesZar) - Number(l.refundedZar));
-    const earned = lines.reduce((n, l) => n + net(l), 0);
-    const held = lines.filter((l) => l.held).reduce((n, l) => n + net(l), 0);
-    const history = payoutList.filter((p) => p.promoterId === u.id);
-    const paid = history.filter((p) => p.status === "paid").reduce((n, p) => n + Number(p.amountZar), 0);
-    const requested = history.filter((p) => p.status === "requested").reduce((n, p) => n + Number(p.amountZar), 0);
+    const sum = (k: "netZar" | "feesZar" | "refundedZar" | "availableZar") => lines.reduce((n, l) => n + Number(l[k]), 0);
+    const held = lines.filter((l) => l.held).reduce((n, l) => n + Number(l.netZar) - Number(l.paidZar) - Number(l.requestedZar), 0);
     return {
-      earnedZar: earned.toFixed(2),
-      feesZar: lines.reduce((n, l) => n + Number(l.feesZar), 0).toFixed(2),
+      earnedZar: sum("netZar").toFixed(2),
+      feesZar: sum("feesZar").toFixed(2),
       resales: mine.reduce((n, d) => n + statsFor(d.id).resales, 0),
       heldZar: held.toFixed(2),
-      paidZar: paid.toFixed(2),
-      requestedZar: requested.toFixed(2),
-      availableZar: Math.max(0, earned - held - paid - requested).toFixed(2),
-      refundedZar: lines.reduce((n, l) => n + Number(l.refundedZar), 0).toFixed(2),
+      paidZar: history.filter((p) => p.status === "paid").reduce((n, p) => n + Number(p.amountZar), 0).toFixed(2),
+      requestedZar: history.filter((p) => p.status === "requested").reduce((n, p) => n + Number(p.amountZar), 0).toFixed(2),
+      availableZar: sum("availableZar").toFixed(2),
+      refundedZar: sum("refundedZar").toFixed(2),
       kind: applications[u.id]?.kind ?? "independent",
       bank: "FNB, account ending 4417",
       events: lines,
       history,
     };
   },
-  requestPayout: async () => {
+  requestPayout: async (eventId) => {
     const s = await mockApi.payouts();
-    if (Number(s.availableZar) <= 0) throw new Error("Nothing to pay out yet");
-    const p: Payout = { id: `payout_${Date.now()}`, promoterId: who().id, promoterName: who().fullName, amountZar: s.availableZar, status: "requested", bank: s.bank, createdAt: new Date().toISOString() };
+    const line = s.events.find((e) => e.eventId === eventId);
+    if (!line || Number(line.availableZar) <= 0) throw new Error(line?.held ? "This event's money is held until the morning after the event" : "Nothing to pay out for this event yet");
+    const p: Payout = { id: `payout_${Date.now()}`, promoterId: who().id, promoterName: who().fullName, eventId, eventName: line.name, amountZar: line.availableZar, status: "requested", bank: s.bank, createdAt: new Date().toISOString() };
     payoutList.unshift(p);
     return p;
   },
   allPayouts: async () => payoutList,
+  eventsInReview: async () => drops.filter((d) => d.review && d.review.status !== "approved" && d.state !== "cancelled").map((d) => ({ ...d })),
+  reviewEvent: async (id, decision, note) => {
+    const d = drop(id);
+    d.review = { status: decision, ...(note ? { note } : {}), submittedAt: d.review?.submittedAt ?? new Date().toISOString(), reviewedAt: new Date().toISOString() };
+    return { ...d };
+  },
+  resubmitEvent: async (id) => {
+    const d = drop(id);
+    if (d.review?.status === "needs_more") d.review = { status: "pending", submittedAt: new Date().toISOString() };
+    return { ...d };
+  },
+  changeRequests: async () =>
+    Object.values(changes)
+      .filter((c) => c.status === "pending")
+      .map((c) => ({ ...c, email: PEOPLE[c.userId]?.email, current: { displayName: applications[c.userId]?.displayName, registrationNumber: applications[c.userId]?.registrationNumber, payoutDetails: applications[c.userId]?.payoutDetails } })),
+  reviewChange: async (userId, decision, note) => {
+    const c = changes[userId];
+    if (decision === "approved" && applications[userId]) {
+      if (c.displayName) applications[userId].displayName = c.displayName;
+      if (c.registrationNumber !== undefined) applications[userId].registrationNumber = c.registrationNumber;
+      if (c.payoutDetails) applications[userId].payoutDetails = c.payoutDetails;
+    }
+    c.status = decision;
+    c.note = note;
+    c.reviewedAt = new Date().toISOString();
+    return c;
+  },
+  updateProfile: async (body) => {
+    const u = who();
+    if (body.fullName) u.fullName = body.fullName;
+    if (body.phone !== undefined) u.phone = body.phone;
+    return meOf(u);
+  },
+  updatePromoterDetails: async (body) => {
+    const u = who();
+    const a = applications[u.id];
+    if (!a) throw new Error("Apply as a promoter first");
+    if (body.socials !== undefined) a.socials = body.socials;
+    if (body.pastEvents !== undefined) a.pastEvents = body.pastEvents;
+    const crit: Partial<ChangeRequest> = {};
+    if (body.displayName !== undefined && body.displayName !== a.displayName) crit.displayName = body.displayName;
+    if (body.registrationNumber !== undefined && body.registrationNumber !== (a.registrationNumber ?? "")) crit.registrationNumber = body.registrationNumber;
+    if (body.payoutDetails !== undefined && body.payoutDetails !== (a.payoutDetails ?? "")) crit.payoutDetails = body.payoutDetails;
+    if (Object.keys(crit).length) changes[u.id] = { userId: u.id, ...crit, status: "pending", createdAt: new Date().toISOString() };
+    return meOf(u);
+  },
+  transfers: async () => {
+    const list = transfersBy[who().id] ?? [];
+    for (const t of list) if (t.status === "processing" && Date.now() - new Date(t.createdAt).getTime() > 15000) {
+      t.status = "completed";
+      t.completedAt = new Date().toISOString();
+    }
+    return [...list];
+  },
+  deposit: async (body) => {
+    await wait(1400);
+    let method: string;
+    if (body.method === "card") {
+      const digits = (body.cardNumber ?? "").replace(/\D/g, "");
+      if (digits === "4000000000000002") throw new Error("Your bank declined this card. Try another card.");
+      if (digits !== "4242424242424242") throw new Error("Use the test card 4242 4242 4242 4242");
+      method = `Visa ending ${digits.slice(-4)}`;
+    } else {
+      if (!body.bank) throw new Error("Choose your bank");
+      method = `Instant EFT, ${body.bank}`;
+    }
+    acct(who().id).allowance += body.amountZar;
+    const t: BankTransfer = { id: `dep_${Date.now()}`, kind: "deposit", amountZar: String(body.amountZar), method, status: "completed", reference: ref("SIYA"), createdAt: new Date().toISOString(), completedAt: new Date().toISOString(), explorerUrl: "#receipt" };
+    (transfersBy[who().id] ??= []).unshift(t);
+    return t;
+  },
+  cashOut: async (body) => {
+    await wait(1200);
+    const a = acct(who().id);
+    if (body.amountZar > a.allowance) throw new Error("That's more than you can cash out right now");
+    a.allowance -= body.amountZar;
+    const digits = body.accountNumber.replace(/\D/g, "");
+    const t: BankTransfer = { id: `out_${Date.now()}`, kind: "cashout", amountZar: String(body.amountZar), method: `${body.bank}, account ending ${digits.slice(-4)}`, status: "processing", reference: ref("SIYA"), createdAt: new Date().toISOString(), explorerUrl: "#receipt" };
+    (transfersBy[who().id] ??= []).unshift(t);
+    return t;
+  },
   markPayoutPaid: async (id) => {
     const p = payoutList.find((x) => x.id === id)!;
+    await wait(1200);
     p.status = "paid";
     p.paidAt = new Date().toISOString();
+    p.reference = ref("PAY");
+    p.explorerUrl = "#receipt";
     return p;
   },
   applications: async (status) => Object.values(applications).filter((a) => !status || a.status === status),

@@ -3,7 +3,10 @@ import path from "path";
 import type {
   AgentLogEntry,
   AlertItem,
+  BankTransfer,
   CancelProgress,
+  ChangeRequest,
+  EventReview,
   Payout,
   BatchStatus,
   DropState,
@@ -39,6 +42,7 @@ export interface DropRecord {
   issuanceTx?: string;
   createdAt?: string;
   cancel?: CancelProgress;
+  review?: EventReview;
 }
 
 export interface WishRecord {
@@ -119,6 +123,8 @@ export interface StoreState {
   checkins: Record<string, CheckinRecord[]>; // keyed by eventId
   turnedAway: Record<string, number>; // keyed by eventId
   payouts: Record<string, Payout>;
+  changeRequests: Record<string, ChangeRequest>; // keyed by userId
+  transfers: Record<string, BankTransfer & { userId: string }>;
 }
 
 const DATA_FILE = process.env.DROP_DATA_FILE || path.resolve(__dirname, "../../data.json");
@@ -142,6 +148,8 @@ function emptyState(): StoreState {
     checkins: {},
     turnedAway: {},
     payouts: {},
+    changeRequests: {},
+    transfers: {},
   };
 }
 
@@ -256,7 +264,11 @@ export async function initStore() {
     // The snapshot wins on live counters if it is ahead of the table.
     const snapDrop = state.drops[fromTable.id];
     const merged = snapDrop && snapDrop.sold > fromTable.sold ? { ...fromTable, sold: snapDrop.sold, state: snapDrop.state } : fromTable;
-    state.drops[fromTable.id] = snapDrop?.cancel ? { ...merged, cancel: snapDrop.cancel } : merged;
+    state.drops[fromTable.id] = {
+      ...merged,
+      ...(snapDrop?.cancel ? { cancel: snapDrop.cancel } : {}),
+      ...(snapDrop?.review ? { review: snapDrop.review } : {}),
+    };
   }
   console.log(`Loaded ${Object.keys(state.drops).length} event(s) from Supabase`);
 }

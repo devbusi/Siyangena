@@ -8,7 +8,7 @@ import { Discover, Tickets, WalletScreen } from "./screens/FanHome";
 import { Alerts, Wishlist } from "./screens/Alerts";
 import { LiveSale } from "./screens/LiveSale";
 import { Mandate } from "./screens/Mandate";
-import { CreateEvent, PromoterDesk, PromoterHome, PromoterOnboard } from "./screens/Promoter";
+import { CreateEvent, PromoterDesk, PromoterEvents, PromoterHome, PromoterOnboard } from "./screens/Promoter";
 import { Resell } from "./screens/Resell";
 import { AdminEvents, AdminOverview, AdminPeople, AdminReview } from "./screens/Admin";
 import { Account } from "./screens/Account";
@@ -47,6 +47,7 @@ export function App() {
               {/* Promoters */}
               <Route path="/promoter" element={<RequireAuth role="promoter"><PromoterHome /></RequireAuth>} />
               <Route path="/promoter/apply" element={<RequireAuth role="promoter"><PromoterOnboard /></RequireAuth>} />
+              <Route path="/promoter/events" element={<RequireAuth role="promoter"><PromoterEvents /></RequireAuth>} />
               <Route path="/promoter/create" element={<RequireAuth role="promoter"><CreateEvent /></RequireAuth>} />
               <Route path="/promoter/events/:id" element={<RequireAuth role="promoter"><PromoterDesk /></RequireAuth>} />
               <Route path="/promoter/events/:id/cancel" element={<RequireAuth role="promoter"><CancelEvent /></RequireAuth>} />

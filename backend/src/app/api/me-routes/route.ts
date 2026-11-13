@@ -6,7 +6,9 @@ import { Sales } from "../../../application-logic/sale-logic/Sales";
 import { Resale } from "../../../application-logic/resale-logic/Resale";
 import { AgentRuns } from "../../../application-logic/agent-run-logic/AgentRuns";
 import { Drop } from "../../../application-logic/drop-logic/Drop";
-import { ApplicationDto, BuyDto, MeAgentDto, ResellDto, TopUpDto, WishDto } from "../../../dto/account.dto";
+import { ApplicationDto, BuyDto, CashOutDto, DepositDto, MeAgentDto, ProfileDto, PromoterDetailsDto, ResellDto, TopUpDto, WishDto } from "../../../dto/account.dto";
+import { Money } from "../../../application-logic/money-logic/Money";
+import { forgetUser } from "../../../middleware/auth";
 import { alerts } from "../../../application-logic/alert-logic/Alerts";
 import { Door } from "../../../application-logic/door-logic/Door";
 import { PutMandateDto } from "../../../dto/fan.dto";
@@ -25,6 +27,7 @@ const resaleService = new Resale();
 const agentRuns = new AgentRuns();
 const dropService = new Drop();
 const door = new Door();
+const money = new Money();
 
 router.use((req, res, next) => {
   if (!supabaseConfigured()) {
@@ -102,6 +105,52 @@ router.post("/promoter-application", validate(ApplicationDto), async (req: Reque
     res.json({ success: true, data: await accounts.submitApplication(me(req).id, req.body as ApplicationDto) });
   } catch (error) {
     sendError(res, error, "Failed to send your application");
+  }
+});
+
+// ---- Your details ----
+
+router.patch("/", validate(ProfileDto), async (req: Request, res: Response) => {
+  try {
+    const data = await accounts.updateProfile(me(req).id, req.body);
+    forgetUser(me(req).id);
+    res.json({ success: true, data });
+  } catch (error) {
+    sendError(res, error, "Failed to save your details");
+  }
+});
+
+router.patch("/promoter-details", validate(PromoterDetailsDto), async (req: Request, res: Response) => {
+  try {
+    res.json({ success: true, data: await accounts.updatePromoterDetails(me(req).id, req.body) });
+  } catch (error) {
+    sendError(res, error, "Failed to save your promoter details");
+  }
+});
+
+// ---- Money in and out (Siyangena Pay, test) ----
+
+router.get("/transfers", async (req: Request, res: Response) => {
+  try {
+    res.json({ success: true, data: money.list(me(req).id) });
+  } catch (error) {
+    sendError(res, error, "Failed to load your payments");
+  }
+});
+
+router.post("/deposits", validate(DepositDto), async (req: Request, res: Response) => {
+  try {
+    res.status(201).json({ success: true, data: await money.deposit(me(req).id, req.body) });
+  } catch (error) {
+    sendError(res, error, "The payment didn't go through");
+  }
+});
+
+router.post("/cashouts", validate(CashOutDto), async (req: Request, res: Response) => {
+  try {
+    res.status(201).json({ success: true, data: await money.cashOut(me(req).id, req.body) });
+  } catch (error) {
+    sendError(res, error, "Cash out didn't go through");
   }
 });
 

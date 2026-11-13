@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import type { AdminUser, ApplicationStatus, PromoterApplication, Role } from "@drop/shared";
+import type { AdminUser, ApplicationStatus, ChangeRequest, Drop, PromoterApplication, Role } from "@drop/shared";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Enter, Marquee, TopBar } from "../components/ui";
 import { EventArt, salePill } from "./FanHome";
 import { useApp } from "../lib/store";
 import { api } from "../lib/api";
-import { time } from "../lib/format";
+import { dateLong, rand, time } from "../lib/format";
 
 const TABS: { id: ApplicationStatus; label: string }[] = [
   { id: "pending", label: "Waiting" },
@@ -16,7 +16,170 @@ const TABS: { id: ApplicationStatus; label: string }[] = [
 ];
 
 // Siyangena admins review every promoter before their events can go on sale.
+// Events waiting for a check before they can go on sale.
+function EventReviews() {
+  const [list, setList] = useState<Drop[] | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const load = () => {
+    api.eventsInReview().then(setList).catch((e) => setError(e instanceof Error ? e.message : "Couldn't load events"));
+  };
+  useEffect(load, []);
+  async function decide(id: string, decision: "approved" | "needs_more") {
+    setBusy(id + decision);
+    setError("");
+    try {
+      await api.reviewEvent(id, decision, notes[id]);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "That didn't save");
+    } finally {
+      setBusy("");
+    }
+  }
+  return (
+    <div className="stack" style={{ marginTop: 18 }}>
+      {error && <p className="callout callout-blocked">{error}</p>}
+      {list === null ? (
+        <p className="muted">Loading</p>
+      ) : list.length === 0 ? (
+        <p className="callout">No events waiting.</p>
+      ) : (
+        list.map((d) => (
+          <article key={d.id} className="panel stack" style={{ gap: 10 }}>
+            <div className="list-card">
+              <div>
+                <h3 style={{ fontSize: "1.4rem" }}>{d.name}</h3>
+                <p className="faint">
+                  {d.promoterName ?? "Promoter"}, {d.venue}
+                  {d.city ? `, ${d.city}` : ""}, {dateLong(d.startsAt)}
+                </p>
+              </div>
+              <span className="pill" style={{ background: d.review?.status === "pending" ? "var(--sun)" : "var(--coral-wash)" }}>
+                {d.review?.status === "pending" ? "Waiting" : "Asked for changes"}
+              </span>
+            </div>
+            <div className="breakdown">
+              <div className="row">
+                <span>Price</span>
+                <strong>{rand(d.priceZar)}</strong>
+              </div>
+              <div className="row">
+                <span>Tickets</span>
+                <strong>
+                  {d.supply}, up to {d.maxPerFan} per fan
+                </strong>
+              </div>
+              <div className="row">
+                <span>Resale cap and fee</span>
+                <strong>
+                  {rand(d.resaleCapZar)}, {d.resaleFeePct}%
+                </strong>
+              </div>
+            </div>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-start" }}>
+              <Link to={`/promoter/events/${d.id}`}>See the event page</Link>
+            </div>
+            {d.review?.status === "pending" && (
+              <>
+                <div className="field">
+                  <label htmlFor={`en-${d.id}`}>Note to the promoter (needed to ask for changes)</label>
+                  <input id={`en-${d.id}`} className="input" value={notes[d.id] ?? ""} onChange={(e) => setNotes({ ...notes, [d.id]: e.target.value })} placeholder="The venue address is missing a street number" />
+                </div>
+                <div className="row" style={{ gap: 8, justifyContent: "flex-start" }}>
+                  <Button disabled={busy !== ""} onClick={() => decide(d.id, "approved")}>
+                    Approve event
+                  </Button>
+                  <Button variant="ghost" disabled={busy !== "" || !(notes[d.id] ?? "").trim()} onClick={() => decide(d.id, "needs_more")}>
+                    Ask for changes
+                  </Button>
+                </div>
+              </>
+            )}
+          </article>
+        ))
+      )}
+    </div>
+  );
+}
+
+// Promoters changing their public name, registration number or bank account.
+function ChangeReviews() {
+  const [list, setList] = useState<ChangeRequest[] | null>(null);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const load = () => {
+    api.changeRequests().then(setList).catch((e) => setError(e instanceof Error ? e.message : "Couldn't load changes"));
+  };
+  useEffect(load, []);
+  async function decide(userId: string, decision: "approved" | "rejected") {
+    setBusy(userId);
+    setError("");
+    try {
+      await api.reviewChange(userId, decision);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "That didn't save");
+    } finally {
+      setBusy("");
+    }
+  }
+  const rows = (c: ChangeRequest) =>
+    [
+      { label: "Public name", from: c.current?.displayName, to: c.displayName },
+      { label: "Registration number", from: c.current?.registrationNumber, to: c.registrationNumber },
+      { label: "Bank account", from: c.current?.payoutDetails, to: c.payoutDetails },
+    ].filter((r) => r.to !== undefined);
+  return (
+    <div className="stack" style={{ marginTop: 18 }}>
+      {error && <p className="callout callout-blocked">{error}</p>}
+      {list === null ? (
+        <p className="muted">Loading</p>
+      ) : list.length === 0 ? (
+        <p className="callout">No changes waiting.</p>
+      ) : (
+        list.map((c) => (
+          <article key={c.userId} className="panel stack" style={{ gap: 10 }}>
+            <div className="list-card">
+              <div>
+                <h3 style={{ fontSize: "1.4rem" }}>{c.current?.displayName ?? "Promoter"}</h3>
+                <p className="faint">
+                  {c.email ? `${c.email}, ` : ""}asked {time(c.createdAt)}
+                </p>
+              </div>
+              <span className="pill" style={{ background: "var(--sun)" }}>
+                Change
+              </span>
+            </div>
+            <div className="breakdown">
+              {rows(c).map((r) => (
+                <div key={r.label} className="row" style={{ alignItems: "flex-start" }}>
+                  <span>{r.label}</span>
+                  <strong style={{ textAlign: "right" }}>
+                    {r.from || "None"} to {r.to || "None"}
+                  </strong>
+                </div>
+              ))}
+            </div>
+            <p className="muted">Check a new bank account belongs to the promoter before approving. Payouts go there from then on.</p>
+            <div className="row" style={{ gap: 8, justifyContent: "flex-start" }}>
+              <Button disabled={busy !== ""} onClick={() => decide(c.userId, "approved")}>
+                Approve change
+              </Button>
+              <Button variant="ghost" disabled={busy !== ""} onClick={() => decide(c.userId, "rejected")}>
+                Don't approve
+              </Button>
+            </div>
+          </article>
+        ))
+      )}
+    </div>
+  );
+}
+
 export function AdminReview() {
+  const [what, setWhat] = useState<"promoters" | "events" | "changes">("promoters");
   const [tab, setTab] = useState<ApplicationStatus>("pending");
   const [apps, setApps] = useState<PromoterApplication[] | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -46,8 +209,22 @@ export function AdminReview() {
       <TopBar />
       
       <Enter>
-        <h1 style={{ margin: "8px 0 6px" }}>Promoter review</h1>
-        <p className="muted" style={{ marginBottom: 14 }}>Approve a promoter and their events can go on sale. Ask for more if something is missing; they see your note.</p>
+        <h1 style={{ margin: "8px 0 6px" }}>Review</h1>
+        <p className="muted" style={{ marginBottom: 14 }}>Approve promoters, then each of their events, before anything goes on sale. Ask for more if something is missing; they see your note.</p>
+        <div className="chips" role="group" aria-label="What to review" style={{ marginBottom: 10 }}>
+          {(
+            [
+              ["promoters", "Promoters"],
+              ["events", "Events"],
+              ["changes", "Detail changes"],
+            ] as const
+          ).map(([id, label]) => (
+            <button key={id} type="button" className="chip" aria-pressed={what === id} onClick={() => setWhat(id)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {what === "promoters" && (
         <div className="chips" role="group" aria-label="Show">
           {TABS.map((t) => (
             <motion.button key={t.id} type="button" className="chip" aria-pressed={tab === t.id} whileTap={{ scale: 0.92 }} onClick={() => setTab(t.id)}>
@@ -55,12 +232,16 @@ export function AdminReview() {
             </motion.button>
           ))}
         </div>
+        )}
       </Enter>
-      {error && (
+      {what === "events" && <EventReviews />}
+      {what === "changes" && <ChangeReviews />}
+      {what === "promoters" && error && (
         <p role="alert" className="callout callout-blocked" style={{ marginTop: 14 }}>
           {error}
         </p>
       )}
+      {what === "promoters" && (
       <div className="stack" style={{ marginTop: 18 }}>
         {apps === null ? (
           <p className="muted">Loading</p>
@@ -135,7 +316,7 @@ export function AdminReview() {
           </AnimatePresence>
         )}
       </div>
-
+      )}
     </div>
   );
 }
@@ -225,14 +406,18 @@ export function AdminOverview() {
   const [pending, setPending] = useState<PromoterApplication[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [payoutsWaiting, setPayoutsWaiting] = useState(0);
+  const [eventsWaiting, setEventsWaiting] = useState(0);
+  const [changesWaiting, setChangesWaiting] = useState(0);
   useEffect(() => {
+    api.eventsInReview().then((l) => setEventsWaiting(l.filter((d) => d.review?.status === "pending").length)).catch(() => undefined);
+    api.changeRequests().then((l) => setChangesWaiting(l.length)).catch(() => undefined);
     api.applications("pending").then(setPending).catch(() => undefined);
     api.users().then(setUsers).catch(() => undefined);
     api.allPayouts().then((l) => setPayoutsWaiting(l.filter((p) => p.status === "requested").length)).catch(() => undefined);
   }, []);
   const onSale = drops.filter((d) => d.state === "open").length;
   const tiles = [
-    { label: "Promoters waiting", value: pending.length, to: "/admin/review", bg: "var(--sun)", cta: "Review them" },
+    { label: "Waiting for review", value: pending.length + eventsWaiting + changesWaiting, to: "/admin/review", bg: "var(--sun)", cta: `${pending.length} promoters, ${eventsWaiting} events, ${changesWaiting} changes` },
     { label: "People", value: users.length, to: "/admin/people", bg: "var(--mint)", cta: "See everyone" },
     { label: "Events", value: drops.length, to: "/admin/events", bg: "#8ec5ff", cta: `${onSale} on sale now` },
     { label: "Payouts to make", value: payoutsWaiting, to: "/admin/payouts", bg: "var(--lilac)", cta: "Pay promoters" },

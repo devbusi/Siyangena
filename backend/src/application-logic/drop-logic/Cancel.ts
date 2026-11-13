@@ -39,6 +39,11 @@ async function holdersOf(eventId: string): Promise<Holder[]> {
   return list;
 }
 
+// Cancelling is for events still selling (or sold out) that haven't started yet.
+export function canCancel(drop: { state: string; startsAt: string }) {
+  return (drop.state === "scheduled" || drop.state === "open" || drop.state === "sold_out") && new Date(drop.startsAt).getTime() > Date.now();
+}
+
 export async function cancelPreview(eventId: string) {
   const drop = dropService.getRecord(eventId);
   const holders = await holdersOf(eventId);
@@ -59,6 +64,7 @@ export async function cancelPreview(eventId: string) {
 export async function cancelEvent(eventId: string, reason: string) {
   const drop = dropService.getRecord(eventId);
   if (drop.state === "cancelled") throw conflict("INVALID_STATE", "This event is already cancelled");
+  if (!canCancel(drop)) throw conflict("INVALID_STATE", "Sales are closed for this event, so it can't be cancelled here");
   const holders = await holdersOf(eventId);
   const total = holders.reduce((n, h) => n + h.refundZar, 0);
 

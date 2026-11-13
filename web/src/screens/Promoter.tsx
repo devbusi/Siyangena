@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { ACTIVE, type PromoterStats } from "@drop/shared";
 import { Button, Enter, FeedRow, Marquee, TopBar } from "../components/ui";
@@ -14,7 +14,7 @@ import { useEvent } from "./EventPage";
 import { EventArt, salePill } from "./FanHome";
 import { dateLong } from "../lib/format";
 import { SA_PLACES } from "../lib/places";
-import type { Demand, Drop } from "@drop/shared";
+import type { Demand, Drop, PayoutSummary } from "@drop/shared";
 
 const toZar = (units: string | number) => Number(units) * ACTIVE.fxZarPerUnit;
 
@@ -55,6 +55,7 @@ export function PromoterDesk() {
 
   const open = drop?.state === "open";
   const cancelled = drop?.state === "cancelled";
+  const reviewed = !drop?.review || drop.review.status === "approved";
   const refunding = cancelled && drop?.cancel && !drop.cancel.done;
   // Refunds run in the background: keep the progress moving.
   useEffect(() => {
@@ -87,7 +88,7 @@ export function PromoterDesk() {
 
   return (
     <div className="desk">
-      <TopBar back={me?.role === "admin" ? "/admin/events" : "/promoter"} />
+      <TopBar back={me?.role === "admin" ? "/admin/events" : "/promoter/events"} />
       <Marquee rows={[[drop ? drop.name : "Your event", "Verified fans only", "Resale at your price", "Live"]]} size={34} speed={36} />
       {!drop ? (
         <Enter>
@@ -102,9 +103,14 @@ export function PromoterDesk() {
           <Enter>
             <div className="row" style={{ flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
               <div>
-                <span className={`pill ${open ? "pill-live" : drop.state === "sold_out" ? "pill-ok" : ""}`} style={cancelled ? { background: "var(--coral)" } : undefined}>
-                  {cancelled ? "Cancelled" : open ? "On sale" : drop.state === "sold_out" ? "Sold out" : drop.state === "closed" ? "Sales closed" : "Not on sale yet"}
-                </span>
+                {(() => {
+                  const pill = promoterPill(drop);
+                  return (
+                    <span className={`pill ${pill.tone}`} style={pill.bg ? { background: pill.bg } : undefined}>
+                      {pill.label}
+                    </span>
+                  );
+                })()}
                 <h1 style={{ marginTop: 10, fontSize: "clamp(2.6rem, 6vw, 4.2rem)" }}>{drop.name}</h1>
                 <p className="hero-meta">{drop.venue}</p>
               </div>
@@ -113,16 +119,18 @@ export function PromoterDesk() {
                 <Button variant="ghost" onClick={() => navigate(`/promoter/events/${id}/door`)}>
                   Door scanner
                 </Button>
-                <Button variant="ghost" onClick={() => navigate(`/promoter/events/${id}/cancel`)}>
-                  Cancel event
-                </Button>
+                {(drop.state === "scheduled" || open || drop.state === "sold_out") && new Date(drop.startsAt).getTime() > Date.now() && (
+                  <Button variant="ghost" onClick={() => navigate(`/promoter/events/${id}/cancel`)}>
+                    Cancel event
+                  </Button>
+                )}
                 {open ? (
                   <Button variant="ghost" disabled={busy} onClick={() => run(() => api.closeSales(id!))}>
                     Close sales
                   </Button>
                 ) : (
-                  <Button variant="sun" disabled={busy || drop.state === "sold_out"} onClick={() => run(() => api.openSales(id!))}>
-                    Open sales
+                  <Button variant="sun" disabled={busy || drop.state === "sold_out" || !reviewed} onClick={() => run(() => api.openSales(id!))}>
+                    {reviewed ? "Open sales" : "Open sales after review"}
                   </Button>
                 )}
               </div>
@@ -130,6 +138,40 @@ export function PromoterDesk() {
                 <span className="pill">View only</span>
               )}
             </div>
+            {owner && drop.review && drop.review.status !== "approved" && !cancelled && (
+              <div className="panel stack" style={{ marginTop: 12, gap: 10, background: drop.review.status === "needs_more" ? "var(--coral-wash)" : "var(--sun-wash)" }}>
+                <p style={{ fontWeight: 800 }}>{drop.review.status === "pending" ? "We're checking this event" : "This event needs changes"}</p>
+                <ol className="steps" style={{ padding: 0 }}>
+                  <li className="done">
+                    <span className="step-dot" aria-hidden="true" />
+                    Event sent
+                  </li>
+                  <li className={drop.review.status === "pending" ? "now" : "done"}>
+                    <span className="step-dot" aria-hidden="true" />
+                    Venue, date and prices checked
+                  </li>
+                  <li className="todo">
+                    <span className="step-dot" aria-hidden="true" />
+                    Approved: open sales whenever you're ready
+                  </li>
+                </ol>
+                {drop.review.status === "pending" ? (
+                  <p className="muted">A person on our team checks every event, usually within a few hours. Fans can't see it until it's approved.</p>
+                ) : (
+                  <>
+                    <p>
+                      <strong>What to change:</strong> {drop.review.note}
+                    </p>
+                    <p className="muted">Update the rules below if that's what's needed, then send it back.</p>
+                    <div>
+                      <Button className="btn-sm" disabled={busy} onClick={() => run(() => api.resubmitEvent(id!), "Sent for review")}>
+                        Send it for review again
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             {cancelled && drop.cancel && (
               <div className="panel stack" style={{ marginTop: 12, background: "#8ec5ff", gap: 8 }}>
                 <p style={{ fontWeight: 800 }}>{drop.cancel.done ? "Everyone's been refunded" : "Refunding fans"}</p>
@@ -288,67 +330,264 @@ export function PromoterDesk() {
 
 // ---------- Promoter home: apply, wait for review, or run events ----------
 
+// What the promoter sees on an event card: review first, then sales.
+export function promoterPill(d: Drop): { label: string; tone: string; bg?: string } {
+  if (d.state === "cancelled") return { label: "Cancelled", tone: "", bg: "var(--coral)" };
+  if (d.review?.status === "pending") return { label: "In review", tone: "", bg: "var(--sun)" };
+  if (d.review?.status === "needs_more") return { label: "Needs changes", tone: "", bg: "var(--coral-wash)" };
+  return salePill(d);
+}
+
+type Filter = "all" | "review" | "scheduled" | "open" | "sold_out" | "closed" | "cancelled";
+const FILTERS: { id: Filter; label: string; test: (d: Drop) => boolean }[] = [
+  { id: "all", label: "All", test: () => true },
+  { id: "review", label: "In review", test: (d) => Boolean(d.review && d.review.status !== "approved") && d.state !== "cancelled" },
+  { id: "scheduled", label: "Not on sale yet", test: (d) => d.state === "scheduled" && (!d.review || d.review.status === "approved") },
+  { id: "open", label: "On sale", test: (d) => d.state === "open" },
+  { id: "sold_out", label: "Sold out", test: (d) => d.state === "sold_out" },
+  { id: "closed", label: "Sales closed", test: (d) => d.state === "closed" },
+  { id: "cancelled", label: "Cancelled", test: (d) => d.state === "cancelled" },
+];
+
+function EventCards({ list }: { list: Drop[] }) {
+  return (
+    <div className="event-grid wide" style={{ marginTop: 16 }}>
+      {list.map((d) => {
+        const pill = promoterPill(d);
+        return (
+          <Link key={d.id} to={`/promoter/events/${d.id}`} className="event-card">
+            <div className="event-art">
+              <EventArt drop={d} />
+            </div>
+            <div className="event-body">
+              <div>
+                <h3>{d.name}</h3>
+                <p className="faint">
+                  {dateLong(d.startsAt)}, {d.sold} of {d.supply} sold
+                </p>
+              </div>
+              <span className={`pill ${pill.tone}`} style={pill.bg ? { background: pill.bg } : undefined}>
+                {pill.label}
+              </span>
+            </div>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+function useMyEvents(enabled: boolean) {
+  const { tick } = useApp();
+  const [mine, setMine] = useState<Drop[] | null>(null);
+  useEffect(() => {
+    if (enabled) api.myEvents().then(setMine).catch(() => setMine([]));
+  }, [enabled, tick]);
+  return mine;
+}
+
+// Overview: what needs the promoter now, at a glance.
 export function PromoterHome() {
   const { me } = useAuth();
   const { tick } = useApp();
   const navigate = useNavigate();
-  const [mine, setMine] = useState<Drop[] | null>(null);
   const app = me?.application;
   const approved = me?.role === "admin" || app?.status === "approved";
+  const mine = useMyEvents(approved);
+  const [money, setMoney] = useState<PayoutSummary | null>(null);
+  const [demand, setDemand] = useState<Demand | null>(null);
 
   useEffect(() => {
-    if (approved) api.myEvents().then(setMine).catch(() => setMine([]));
+    if (!approved) return;
+    api.payouts().then(setMoney).catch(() => setMoney(null));
+    api.demand({}).then(setDemand).catch(() => setDemand(null));
   }, [approved, tick]);
 
   if (!me) return null;
   if (!app && me.role !== "admin") return <Navigate to="/promoter/apply" replace />;
   if (!approved) return <ReviewStatus />;
 
+  const list = mine ?? [];
+  const live = list.filter((d) => d.state !== "cancelled");
+  const sold = live.reduce((n, d) => n + d.sold, 0);
+  const supply = live.reduce((n, d) => n + d.supply, 0);
+  const inReview = list.filter((d) => d.review && d.review.status !== "approved" && d.state !== "cancelled");
+  const next = live
+    .filter((d) => new Date(d.startsAt).getTime() > Date.now())
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt))[0];
+  const ready = money ? money.events.filter((e) => Number(e.availableZar) > 0) : [];
+
   return (
     <div className="desk">
       <TopBar />
-      <Marquee rows={[["Your events", "Sell out fairly", "Earn on resale", "No touts"]]} size={34} speed={36} />
+      <Marquee rows={[["Overview", "Sell out fairly", "Earn on resale", "No touts"]]} size={34} speed={36} />
       <Enter>
         <div className="row" style={{ flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
           <div>
-            <span className="pill pill-ok">Approved</span>
+            <span className="pill pill-ok">Approved promoter</span>
             <h1 style={{ marginTop: 10, fontSize: "clamp(2.6rem, 6vw, 4.2rem)" }}>{app?.displayName ?? me.fullName}</h1>
           </div>
+          <div className="row" style={{ gap: 8 }}>
+            <Button variant="ghost" onClick={() => navigate("/promoter/events")}>
+              All events
+            </Button>
+            <Button onClick={() => navigate("/promoter/create")}>New event</Button>
+          </div>
+        </div>
+      </Enter>
+
+      <div className="kpis">
+        <button type="button" className="kpi kpi-link" style={{ background: "var(--sun)" }} onClick={() => navigate("/promoter/events")}>
+          <p style={{ fontWeight: 800 }}>Tickets sold</p>
+          <p className="stat-value num">{sold}</p>
+          <p className="faint">of {supply} across {live.length} {live.length === 1 ? "event" : "events"}</p>
+        </button>
+        <button type="button" className="kpi kpi-link" style={{ background: "var(--mint)" }} onClick={() => navigate("/promoter/payouts")}>
+          <p style={{ fontWeight: 800 }}>Earned</p>
+          <p className="stat-value num">{money ? rand(money.earnedZar) : "…"}</p>
+          <p className="faint">{money ? `${rand(money.feesZar)} from resale fees` : ""}</p>
+        </button>
+        <button type="button" className="kpi kpi-link" style={{ background: "var(--lilac)" }} onClick={() => navigate("/promoter/payouts")}>
+          <p style={{ fontWeight: 800 }}>Ready to pay out</p>
+          <p className="stat-value num">{money ? rand(money.availableZar) : "…"}</p>
+          <p className="faint">{money && Number(money.heldZar) > 0 ? `${rand(money.heldZar)} held until events happen` : "Request per event"}</p>
+        </button>
+        <button type="button" className="kpi kpi-link" style={{ background: "#8ec5ff" }} onClick={() => navigate("/promoter/events?filter=review")}>
+          <p style={{ fontWeight: 800 }}>In review</p>
+          <p className="stat-value num">{inReview.length}</p>
+          <p className="faint">Events waiting for Siyangena</p>
+        </button>
+      </div>
+
+      {mine === null ? (
+        <p className="muted">Loading your events</p>
+      ) : list.length === 0 ? (
+        <div className="callout stack" style={{ gap: 8, maxWidth: 620 }}>
+          <strong>No events yet</strong>
+          <p className="muted">Create your first event. You set the price, how many tickets each fan can hold and the resale cap. We check it, then you open sales.</p>
+          <Button onClick={() => navigate("/promoter/create")}>Create an event</Button>
+        </div>
+      ) : (
+        <div className="desk-form" style={{ alignItems: "flex-start" }}>
+          <div className="stack">
+            <h2>Needs you</h2>
+            {inReview.filter((d) => d.review?.status === "needs_more").map((d) => (
+              <div key={d.id} className="panel row" style={{ background: "var(--coral-wash)", flexWrap: "wrap" }}>
+                <div>
+                  <strong>{d.name} needs changes</strong>
+                  <p className="faint">{d.review?.note}</p>
+                </div>
+                <Button className="btn-sm" onClick={() => navigate(`/promoter/events/${d.id}`)}>
+                  Fix it
+                </Button>
+              </div>
+            ))}
+            {ready.map((e) => (
+              <div key={e.eventId} className="panel row" style={{ flexWrap: "wrap" }}>
+                <div>
+                  <strong>{rand(e.availableZar)} ready from {e.name}</strong>
+                  <p className="faint">Request it and we pay it to your bank.</p>
+                </div>
+                <Button className="btn-sm" onClick={() => navigate("/promoter/payouts")}>
+                  Payouts
+                </Button>
+              </div>
+            ))}
+            {live
+              .filter((d) => d.state === "scheduled" && (!d.review || d.review.status === "approved"))
+              .map((d) => (
+                <div key={d.id} className="panel row" style={{ flexWrap: "wrap" }}>
+                  <div>
+                    <strong>{d.name} is approved</strong>
+                    <p className="faint">Open sales whenever you're ready.</p>
+                  </div>
+                  <Button variant="sun" className="btn-sm" onClick={() => navigate(`/promoter/events/${d.id}`)}>
+                    Open sales
+                  </Button>
+                </div>
+              ))}
+            {inReview.filter((d) => d.review?.status === "needs_more").length === 0 && ready.length === 0 && !live.some((d) => d.state === "scheduled" && (!d.review || d.review.status === "approved")) && (
+              <p className="muted">Nothing needs you right now.</p>
+            )}
+            {next && (
+              <>
+                <h2 style={{ marginTop: 10 }}>Next up</h2>
+                <EventCards list={[next]} />
+                <div className="row" style={{ gap: 8, justifyContent: "flex-start" }}>
+                  <Button variant="ghost" className="btn-sm" onClick={() => navigate(`/promoter/events/${next.id}`)}>
+                    Control room
+                  </Button>
+                  <Button variant="ghost" className="btn-sm" onClick={() => navigate(`/promoter/events/${next.id}/door`)}>
+                    Door scanner
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+          <aside className="desk-aside stack">
+            <div className="panel stack" style={{ background: "var(--lilac)", gap: 6 }}>
+              <h3>What fans are asking for</h3>
+              {demand && demand.top.length > 0 ? (
+                demand.top.map((t) => (
+                  <div key={`${t.query}-${t.city ?? ""}`} className="row">
+                    <span>
+                      {t.query}
+                      {t.city ? `, ${t.city}` : ""}
+                    </span>
+                    <strong className="num">{t.fans}</strong>
+                  </div>
+                ))
+              ) : (
+                <p>No wishes yet. As fans add who they want to see, the top asks show here.</p>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Every event, filtered by where it's at.
+export function PromoterEvents() {
+  const { me } = useAuth();
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const approved = me?.role === "admin" || me?.application?.status === "approved";
+  const mine = useMyEvents(approved);
+  const filter = (params.get("filter") as Filter) || "all";
+  const f = FILTERS.find((x) => x.id === filter) ?? FILTERS[0];
+  const list = (mine ?? []).filter(f.test).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  if (me && !approved) return <Navigate to="/promoter" replace />;
+  return (
+    <div className="desk">
+      <TopBar />
+      <Enter>
+        <div className="row" style={{ flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
+          <h1 style={{ fontSize: "clamp(2.6rem, 6vw, 4.2rem)" }}>Events</h1>
           <Button onClick={() => navigate("/promoter/create")}>New event</Button>
         </div>
       </Enter>
+      <div className="chips" role="radiogroup" aria-label="Show" style={{ marginTop: 14 }}>
+        {FILTERS.map((x) => {
+          const count = (mine ?? []).filter(x.test).length;
+          return (
+            <button key={x.id} type="button" role="radio" aria-checked={filter === x.id} className="chip" onClick={() => setParams(x.id === "all" ? {} : { filter: x.id })}>
+              {x.label} {mine ? `(${count})` : ""}
+            </button>
+          );
+        })}
+      </div>
       {mine === null ? (
         <p className="muted" style={{ marginTop: 20 }}>
           Loading your events
         </p>
-      ) : mine.length === 0 ? (
-        <div className="callout stack" style={{ gap: 8, marginTop: 20, maxWidth: 620 }}>
-          <strong>No events yet</strong>
-          <p className="muted">Create your first event. You set the price, how many tickets each fan can hold and the resale cap.</p>
-          <Button onClick={() => navigate("/promoter/create")}>Create an event</Button>
-        </div>
+      ) : list.length === 0 ? (
+        <p className="callout" style={{ marginTop: 20, maxWidth: 620 }}>
+          {filter === "all" ? "No events yet. Create one and we'll check it before it goes on sale." : `No events ${f.label.toLowerCase()} right now.`}
+        </p>
       ) : (
-        <div className="event-grid wide" style={{ marginTop: 20 }}>
-          {mine.map((d) => {
-            const pill = salePill(d);
-            return (
-              <Link key={d.id} to={`/promoter/events/${d.id}`} className="event-card">
-                <div className="event-art">
-                  <EventArt drop={d} />
-                </div>
-                <div className="event-body">
-                  <div>
-                    <h3>{d.name}</h3>
-                    <p className="faint">
-                      {dateLong(d.startsAt)}, {d.sold} of {d.supply} sold
-                    </p>
-                  </div>
-                  <span className={`pill ${pill.tone}`}>{pill.label}</span>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
+        <EventCards list={list} />
       )}
     </div>
   );
@@ -728,8 +967,9 @@ export function CreateEvent() {
             </p>
           )}
           <Button type="submit" block disabled={busy || !p || cap <= 0}>
-            Create event
+            {busy ? "Creating" : "Create and send for review"}
           </Button>
+          <p className="faint">We check every event before fans can see it, usually within a few hours. Then you open sales.</p>
         </form>
       </Enter>
       <aside className="desk-aside stack">

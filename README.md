@@ -22,9 +22,12 @@ The promoter decides the rules per event: supply, price, tickets per fan, resale
 
 - **Wishlist and alerts.** Fans add who they want to see (artist, event or vibe, a city and a max price). They get an alert when a matching event is listed, when sales open, and when a resale ticket under their max comes up. Each alert has Buy tickets and Send my agent in right there. The agent only ever buys on Siyangena.
 - **Demand for promoters.** On New event, promoters see how many fans have a wish that fits what they're planning, and the most asked-for wishes in that city.
-- **Door scanner.** Each ticket shows a QR code that changes every minute. The promoter scans it at the door. The code is signed by the server and checked against the ledger, and each ticket a wallet holds lets one person in, so screenshots and copies don't get in.
+- **Door scanner.** Each ticket shows a QR code, and a short code staff can type, that change every minute. The promoter scans it at the door. The code is signed by the server and checked against the ledger, and each ticket a wallet holds lets one person in, so screenshots and copies don't get in.
 - **Cancel an event.** The promoter types CANCEL and a message for fans. Sales stop, every holder is refunded to their wallet from the platform wallet (face value, or what they paid on resale), and fans get an alert with the message.
-- **Payouts.** Promoters see ticket sales, resale fees, refunds, what's held and what's been paid. Registered businesses can be paid as tickets sell. Independent promoters are paid the morning after the event. They request a payout, and an admin pays it by bank transfer and marks it paid.
+- **Event review.** Every new event from a promoter is checked by an admin before fans can see it or sales can open. The admin approves it or asks for changes with a note, and the promoter sees the status on the event.
+- **Payouts, per event.** Promoters see ticket sales, resale fees, refunds, what's held and what's been paid, per event. Registered businesses can be paid as tickets sell. Independent promoters are paid the morning after the event. They request each event's payout. When the admin presses Send bank transfer, the money moves from the platform wallet to the bank wallet on the ledger and the transfer gets a reference.
+- **Money in and out (Siyangena Pay, test).** Fans add money by card (test card 4242 4242 4242 4242, or 4000 0000 0000 0002 to see a decline) or instant EFT, and cash out to a bank account. The card and bank are simulated; every rand is a real payment on the test ledger between the platform's bank wallet and the fan's wallet. In production the gateway becomes a South African payment provider and the float is converted to and from rand by a licensed exchange.
+- **Your details.** Fans and promoters edit their name and mobile. Promoters edit socials and past events straight away; a new public name, registration number or bank account waits for an admin's approval.
 
 ## What enforces what
 
@@ -115,12 +118,13 @@ Every alert also goes out as a text. Fans get a text when their tickets arrive (
 ## Test it with real people
 
 1. Sign up as a promoter, fill in the application.
-2. As an admin, open Promoter review and approve it.
-3. As the promoter, create an event and open sales.
-4. Sign up as a fan, verify, add test money in Wallet, add a wish, buy tickets.
-5. A second fan adds an agent with limits. A fan who can't go resells, and the other buys it.
-6. At the door, the promoter opens Door scanner and scans a fan's ticket from Tickets, Show at the door. Scan it again: Already used.
-7. The promoter requests a payout, and the admin marks it paid. Cancel a test event to see every fan refunded.
+2. As an admin, open Review, Promoters and approve it.
+3. As the promoter, create an event. It goes to review.
+4. As the admin, open Review, Events and approve the event. As the promoter, open sales.
+5. Sign up as a fan, verify, add money in Wallet (test card 4242 4242 4242 4242), add a wish, buy tickets.
+6. A second fan adds an agent with limits. A fan who can't go resells, and the other buys it.
+7. At the door, the promoter opens Door scanner and scans a fan's ticket from Tickets, Show at the door. Scan it again: Already used.
+8. The promoter requests a payout for an event, and the admin presses Send bank transfer. A fan cashes out from Wallet. Cancel a test event to see every fan refunded.
 
 ### Preview without a ledger
 

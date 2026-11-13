@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import type { Drop, FanTickets, FanWallet } from "@drop/shared";
+import type { BankTransfer, Drop, FanTickets, FanWallet } from "@drop/shared";
 import { Button, Enter, Marquee, Ticket, TopBar } from "../components/ui";
 import { CityArt, SCENES, type Scene } from "../components/CityArt";
 import { DoorPass } from "../components/DoorPass";
+import { AddMoney, CashOut } from "../components/PayGateway";
 import { api } from "../lib/api";
 import { dateLong, rand, time } from "../lib/format";
 import { useApp } from "../lib/store";
@@ -208,9 +209,10 @@ export function WalletScreen() {
   const { tick } = useApp();
   const [wallet, setWallet] = useState<FanWallet | null>(null);
   const [history, setHistory] = useState<FanTickets["history"]>([]);
-  const [busy, setBusy] = useState(0);
-  const [error, setError] = useState("");
+  const [error] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [sheet, setSheet] = useState<"add" | "out" | null>(null);
+  const [transfers, setTransfers] = useState<BankTransfer[]>([]);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -222,19 +224,9 @@ export function WalletScreen() {
       })
       .catch((e) => setLoadError(e instanceof Error ? e.message : "Couldn't load your wallet"));
     api.tickets().then((t) => setHistory(t.history)).catch(() => undefined);
+    api.transfers().then(setTransfers).catch(() => undefined);
   }, [tick, attempt]);
 
-  async function topUp(amount: number) {
-    setError("");
-    setBusy(amount);
-    try {
-      setWallet(await api.topUp(amount));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Top-up didn't go through");
-    } finally {
-      setBusy(0);
-    }
-  }
 
   return (
     <>
@@ -260,15 +252,39 @@ export function WalletScreen() {
         </Enter>
         <Enter delay={0.06}>
           <div className="stack" style={{ marginTop: 16 }}>
-            <p style={{ fontWeight: 800 }}>Add test money</p>
             <div className="row" style={{ gap: 8 }}>
-              {[500, 1000, 2500].map((a) => (
-                <Button key={a} variant="ghost" className="btn-sm" style={{ flex: 1 }} disabled={busy > 0} onClick={() => topUp(a)}>
-                  {busy === a ? "Adding" : rand(a)}
-                </Button>
-              ))}
+              <Button style={{ flex: 1 }} onClick={() => setSheet("add")}>
+                Add money
+              </Button>
+              <Button variant="ghost" style={{ flex: 1 }} disabled={!wallet || Number(wallet.allowanceZar) <= 0} onClick={() => setSheet("out")}>
+                Cash out
+              </Button>
             </div>
-            <p className="faint">This is the test version, so top-ups are play money. Card and instant EFT come at launch.</p>
+            <p className="faint">Card or instant EFT in, bank transfer out. In the test version cards and banks are simulated, and every rand moves on the test ledger.</p>
+            {transfers.length > 0 && (
+              <div className="stack" style={{ gap: 0, marginTop: 8 }}>
+                <p className="d" style={{ fontSize: "1.4rem", marginBottom: 6 }}>
+                  Money in and out
+                </p>
+                {transfers.slice(0, 8).map((t) => (
+                  <div key={t.id} className="row" style={{ padding: "10px 0", borderBottom: "2px solid #000", alignItems: "flex-start" }}>
+                    <div>
+                      <strong>
+                        {t.kind === "deposit" ? "Added" : "Cashed out"} {rand(t.amountZar)}
+                      </strong>
+                      <p className="faint">
+                        {t.method}, ref {t.reference}, {t.status === "processing" ? "on its way" : t.status === "failed" ? "didn't go through" : time(t.completedAt ?? t.createdAt)}
+                      </p>
+                    </div>
+                    {t.explorerUrl && (
+                      <a href={t.explorerUrl} target="_blank" rel="noreferrer">
+                        Receipt
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
             {error && (
               <p role="alert" className="callout callout-blocked">
                 {error}
@@ -297,6 +313,10 @@ export function WalletScreen() {
           </div>
         </Enter>
       </div>
+      <AnimatePresence>
+        {sheet === "add" && <AddMoney onClose={() => setSheet(null)} onDone={() => setAttempt((n) => n + 1)} />}
+        {sheet === "out" && <CashOut max={Number(wallet?.allowanceZar ?? 0)} onClose={() => setSheet(null)} onDone={() => setAttempt((n) => n + 1)} />}
+      </AnimatePresence>
     </>
   );
 }
