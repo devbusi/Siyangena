@@ -182,6 +182,39 @@ export interface NavItem {
   end?: boolean;
 }
 
+// Promoters and admins can switch to buying tickets with the same account, and back.
+const MODE_KEY = "siya-mode";
+const modeListeners = new Set<() => void>();
+function readMode(): "fan" | "work" {
+  try {
+    return localStorage.getItem(MODE_KEY) === "fan" ? "fan" : "work";
+  } catch {
+    return "work";
+  }
+}
+export function setBuyerMode(on: boolean) {
+  try {
+    localStorage.setItem(MODE_KEY, on ? "fan" : "work");
+  } catch {
+    /* storage can be off */
+  }
+  modeListeners.forEach((l) => l());
+}
+// The role the menus follow: a promoter or admin in buying mode gets the fan's menus.
+export function useMenuRole(): string | undefined {
+  const { me } = useAuth();
+  const [mode, setMode] = useState(readMode);
+  useEffect(() => {
+    const l = () => setMode(readMode());
+    modeListeners.add(l);
+    return () => {
+      modeListeners.delete(l);
+    };
+  }, []);
+  if (!me) return undefined;
+  return me.role !== "fan" && mode === "fan" ? "fan" : me.role;
+}
+
 export function navFor(role: string | undefined, signedIn: boolean): NavItem[] {
   if (role === "admin")
     return [
@@ -215,12 +248,13 @@ export function navFor(role: string | undefined, signedIn: boolean): NavItem[] {
 const NO_TABS = [/^\/signin/, /^\/signup/, /^\/setup/, /^\/verify/, /^\/events\/[^/]+/, /^\/tickets\/[^/]+\/resell/];
 
 export function RoleTabBar() {
-  const { me, signedIn, ready } = useAuth();
+  const { signedIn, ready } = useAuth();
+  const menuRole = useMenuRole();
   const { pathname } = useLocation();
   if (!ready || NO_TABS.some((r) => r.test(pathname))) return null;
   return (
     <nav className="tabbar" aria-label="Main">
-      {navFor(me?.role, signedIn).map((item) => (
+      {navFor(menuRole, signedIn).map((item) => (
         <NavLink key={item.to} to={item.to} end={item.end}>
           {item.label}
         </NavLink>
@@ -235,13 +269,13 @@ function moreFor(role: string | undefined): NavItem[] {
     return [
       { to: "/admin/people", label: "People and roles" },
       { to: "/admin/payouts", label: "Payouts" },
-      { to: "/events", label: "Browse events as a fan" },
+      { to: "/events", label: "Browse events" },
       { to: "/account", label: "My account" },
     ];
   if (role === "promoter")
     return [
       { to: "/promoter/create", label: "New event" },
-      { to: "/events", label: "Browse events as a fan" },
+      { to: "/events", label: "Browse events" },
       { to: "/account", label: "My account" },
     ];
   return [
@@ -275,8 +309,10 @@ export function PlusMenu() {
     };
   }, [open]);
 
-  const items = [...navFor(me?.role, true), ...moreFor(me?.role)].filter((item, i, all) => all.findIndex((x) => x.to === item.to) === i);
-  const roleLabel = me?.role === "admin" ? "Admin" : me?.role === "promoter" ? "Promoter" : "Fan";
+  const menuRole = useMenuRole();
+  const buying = Boolean(me && me.role !== "fan" && menuRole === "fan");
+  const items = [...navFor(menuRole, true), ...moreFor(menuRole)].filter((item, i, all) => all.findIndex((x) => x.to === item.to) === i);
+  const roleLabel = me?.role === "admin" ? "Admin" : me?.role === "promoter" ? "Promoter" : "Ticket holder";
 
   return (
     <div className="plus" ref={ref}>
@@ -307,7 +343,7 @@ export function PlusMenu() {
           >
             <div className="plus-head">
               <strong>{me?.fullName || "Your account"}</strong>
-              <span className="pill">{roleLabel}</span>
+              <span className="pill">{buying ? "Ticket holder mode" : `${roleLabel} mode`}</span>
             </div>
             {items.map((item, i) => (
               <motion.div key={item.to} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.03 * i }}>
@@ -316,6 +352,20 @@ export function PlusMenu() {
                 </NavLink>
               </motion.div>
             ))}
+            {me && me.role !== "fan" && (
+              <button
+                type="button"
+                role="menuitem"
+                className="plus-item"
+                onClick={() => {
+                  setBuyerMode(!buying);
+                  setOpen(false);
+                  navigate(buying ? (me.role === "admin" ? "/admin" : "/promoter") : "/events");
+                }}
+              >
+                {buying ? (me.role === "admin" ? "Switch to admin mode" : "Switch to promoter mode") : "Switch to ticket holder mode"}
+              </button>
+            )}
             <button
               type="button"
               role="menuitem"
@@ -335,9 +385,9 @@ export function PlusMenu() {
 }
 
 export function TopBar({ back }: { back?: string }) {
-  const { signedIn, me, signOut } = useAuth();
-  const navigate = useNavigate();
-  const home = !me ? "/" : me.role === "admin" ? "/admin" : me.role === "promoter" ? "/promoter" : "/events";
+  const { signedIn, me } = useAuth();
+  const menuRole = useMenuRole();
+  const home = !me ? "/" : menuRole === "admin" ? "/admin" : menuRole === "promoter" ? "/promoter" : "/events";
   return (
     <header className="topbar">
       {back ? (
@@ -352,7 +402,7 @@ export function TopBar({ back }: { back?: string }) {
         </Link>
       )}
       <nav className="topnav" aria-label="Main">
-        {navFor(me?.role, signedIn).map((item) => (
+        {navFor(menuRole, signedIn).map((item) => (
           <NavLink key={item.to} to={item.to} end={item.end}>
             {item.label}
           </NavLink>
@@ -360,7 +410,7 @@ export function TopBar({ back }: { back?: string }) {
       </nav>
       {signedIn ? (
         <div className="topbar-actions">
-          {me?.role === "fan" && <AlertBell />}
+          {menuRole === "fan" && <AlertBell />}
           <PlusMenu />
         </div>
       ) : (
@@ -400,7 +450,7 @@ export function DemoBar() {
   const { me } = useAuth();
   if (!MOCK) return null;
   const items: { id: "fan" | "promoter" | "admin"; label: string; to: string }[] = [
-    { id: "fan", label: "Fan", to: "/events" },
+    { id: "fan", label: "Ticket holder", to: "/events" },
     { id: "promoter", label: "Promoter", to: "/promoter" },
     { id: "admin", label: "Admin", to: "/admin" },
   ];

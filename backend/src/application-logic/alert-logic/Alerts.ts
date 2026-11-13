@@ -38,7 +38,7 @@ function words(text: string): string[] {
     .filter((w) => w.length >= 3 && !STOP.has(w) && !CITY_ALIASES[w]);
 }
 
-type EventLike = { name: string; venue?: string; city?: string; scene?: string; promoterName?: string; priceZar?: number };
+type EventLike = { name: string; venue?: string; city?: string; scene?: string; promoterName?: string; category?: string; priceZar?: number };
 
 // Does this wish fit this event? Any meaningful word in common, the same city (if one was
 // given) and a price at or under their max.
@@ -50,7 +50,7 @@ export function wishMatches(w: { query: string; city?: string; maxZar?: number }
   const wanted = words(w.query);
   // A wish that is only a city ("anything in Durban") matches every event there.
   if (wanted.length === 0) return Boolean(city);
-  const hay = `${d.name} ${d.venue ?? ""} ${d.scene ?? ""} ${d.promoterName ?? ""}`.toLowerCase();
+  const hay = `${d.name} ${d.venue ?? ""} ${d.scene ?? ""} ${d.promoterName ?? ""} ${d.category ?? ""}`.toLowerCase();
   return wanted.some((word) => hay.includes(word) || (word.length > 4 && hay.includes(word.slice(0, -1))));
 }
 
@@ -217,7 +217,7 @@ export class Alerts {
           this.push(w.fanId, {
             kind: "resale",
             title: `A ${d.name} ticket came up`,
-            body: `${randText(l.totalZar)} all-in from a verified fan, under your max. First to buy gets it.`,
+            body: `${randText(l.totalZar)} all-in from a verified ticket holder, under your max. First to buy gets it.`,
             eventId: d.id,
           });
         }
@@ -226,7 +226,7 @@ export class Alerts {
       case "resale.settled": {
         const l = e.listingId ? state.listings[e.listingId] : undefined;
         if (!l) break;
-        this.push(l.sellerFanId, { kind: "sold", title: "Your ticket sold", body: `${randText(l.priceZar)} is in your wallet. It went to a verified fan.`, eventId: d.id }, { sms: false });
+        this.push(l.sellerFanId, { kind: "sold", title: "Your ticket sold", body: `${randText(l.priceZar)} is in your wallet. It went to a verified ticket holder.`, eventId: d.id }, { sms: false });
         if (l.buyerFanId)
           this.push(l.buyerFanId, { kind: "tickets", title: "You got a resale ticket", body: `${d.name}, ${randText(l.totalZar)} all-in. It's in your wallet.`, eventId: d.id }, { sms: false });
         break;

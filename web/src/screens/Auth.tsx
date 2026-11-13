@@ -40,7 +40,7 @@ export function Landing() {
             <span className="tile tired-tile">Tired of missing out the second sales open?</span>
           </p>
           <p className="muted" style={{ marginTop: 16, maxWidth: 560 }}>
-            Scalpers have bots. Now fans have agents. Buy real tickets at face value, or add an agent that buys the moment sales open, within limits you set.
+            Scalpers have bots. Now you have agents. Buy real tickets at face value, or add an agent that buys the moment sales open, within limits you set.
           </p>
           <div className="tag-row" style={{ marginTop: 22 }}>
             {me ? (
@@ -77,7 +77,7 @@ export function Landing() {
         <div className="landing-pair" style={{ marginTop: 14 }}>
           <div className="landing-step" style={{ background: "var(--lilac)" }}>
             <h3>Can't go?</h3>
-            <p style={{ fontSize: "1.1rem" }}>Resell to a verified fan at the promoter's cap. You get your money back, and nobody profits off you.</p>
+            <p style={{ fontSize: "1.1rem" }}>Resell to a verified ticket holder at the promoter's cap. You get your money back, and nobody profits off you.</p>
           </div>
           <div className="landing-step" style={{ background: "var(--coral)" }}>
             <h3>Fakes fail</h3>
@@ -118,7 +118,7 @@ export function Landing() {
       <section className="landing-promoter wide" style={{ marginTop: 48 }}>
         <div>
           <h2 style={{ fontSize: "clamp(2.4rem, 5vw, 4rem)" }}>Promoters: sell out fairly</h2>
-          <p style={{ marginTop: 10, fontSize: "1.15rem" }}>Set the price, the limit per fan and the resale cap. Earn a fee on every resale, from Musina to Gqeberha.</p>
+          <p style={{ marginTop: 10, fontSize: "1.15rem" }}>Set the price, the limit per person and the resale cap. Earn a fee on every resale, from Musina to Gqeberha.</p>
         </div>
         <Button variant="sun" onClick={() => navigate(me ? "/promoter" : "/signup?as=promoter")}>
           Sell with Siyangena

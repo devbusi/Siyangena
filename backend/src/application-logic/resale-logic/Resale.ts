@@ -92,6 +92,7 @@ export class Resale {
     const drop = dropService.getRecord(listing.eventId);
     if (listing.status !== "open") throw conflict("INVALID_STATE", `Listing is ${listing.status}`);
     if (listing.sellerFanId === buyerFanId) throw badRequest("INVALID_STATE", "Seller cannot buy their own listing");
+    if (drop.promoterId && drop.promoterId === buyerFanId) throw forbidden("UNAUTHORIZED", "You can't buy tickets to your own event");
 
     const seller = fanService.getContext(listing.sellerFanId);
     const buyer = fanService.getContext(buyerFanId);
@@ -109,7 +110,7 @@ export class Resale {
 
     const buyerHeld = await fanService.getTicketCount(buyerFanId, drop.id);
     if (buyerHeld + 1 > drop.maxPerFan) {
-      const message = `${buyerFanId}: max ${drop.maxPerFan} per fan (holds ${buyerHeld})`;
+      const message = `${buyerFanId}: max ${drop.maxPerFan} per person (holds ${buyerHeld})`;
       events.emit("mandate.blocked", message, { fanId: buyerFanId, eventId: drop.id });
       throw forbidden("LIMIT_PER_FAN", message);
     }
@@ -345,7 +346,7 @@ export class Resale {
         amountRlusd: zarToSettle(Number(listing.totalZar)),
         txHash: outer.hash,
       });
-      notify(record.sellerFanId, `Siyangena: your ${drop.name} ticket sold to a verified fan. R${listing.priceZar} is in your wallet.`);
+      notify(record.sellerFanId, `Siyangena: your ${drop.name} ticket sold to a verified ticket holder. R${listing.priceZar} is in your wallet.`);
       notify(record.buyerFanId, `Siyangena: you got a ${drop.name} ticket at a fair price. It's in your wallet: ${ticketsLink()}`);
       events.emit(
         "resale.settled",

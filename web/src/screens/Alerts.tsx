@@ -239,7 +239,7 @@ export function Wishlist() {
           </div>
         ))}
         <p className="faint" style={{ textAlign: "center" }}>
-          Your agent only buys on Siyangena, where every ticket is real and capped. Promoters see what fans are asking for, so the events you want come here.
+          Your agent only buys on Siyangena, where every ticket is real and capped. Promoters see what people are asking for, so the events you want come here.
         </p>
       </div>
     </div>

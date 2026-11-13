@@ -14,6 +14,7 @@ import { initStore } from "../lib/store";
 import { accounts } from "../application-logic/account-logic/Accounts";
 import { supabaseConfigured } from "../lib/supabase";
 import { alerts } from "../application-logic/alert-logic/Alerts";
+import { Payouts } from "../application-logic/payout-logic/Payouts";
 
 // server instance of the app
 const app = express();
@@ -64,6 +65,7 @@ async function boot() {
   await accounts.init();
   new Drop().seedFromEnv();
   alerts.start();
+  new Payouts().start();
 }
 
 boot()

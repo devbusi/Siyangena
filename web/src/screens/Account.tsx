@@ -5,7 +5,7 @@ import { useAuth } from "../lib/auth";
 import { api } from "../lib/api";
 
 const ROLE_COPY: Record<string, { title: string; body: string }> = {
-  fan: { title: "Fan", body: "Buy tickets, add an agent with your own limits, and resell fairly if you can't go." },
+  fan: { title: "Ticket holder", body: "Buy tickets, add an agent with your own limits, and resell fairly if you can't go." },
   promoter: { title: "Promoter", body: "Create events, set your rules and watch sales live. Every promoter and every event is checked before it goes on sale." },
   admin: { title: "Admin", body: "Review promoters and events, pay promoters, and look after everyone's roles." },
 };
@@ -156,7 +156,7 @@ export function Account() {
                 <p className="callout">
                   Waiting for an admin to approve your change to{" "}
                   {[pending.displayName !== undefined && "your public name", pending.registrationNumber !== undefined && "registration number", pending.payoutDetails !== undefined && "bank account"].filter(Boolean).join(", ")}
-                  . Until then fans and payouts use your current details.
+                  . Until then your events and payouts use your current details.
                 </p>
               )}
               {me.changeRequest?.status === "rejected" && <p className="callout callout-blocked">Your last change wasn't approved{me.changeRequest.note ? `: ${me.changeRequest.note}` : "."}</p>}

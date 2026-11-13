@@ -43,6 +43,7 @@ export interface DropRecord {
   createdAt?: string;
   cancel?: CancelProgress;
   review?: EventReview;
+  category?: string;
 }
 
 export interface WishRecord {
@@ -268,6 +269,7 @@ export async function initStore() {
       ...merged,
       ...(snapDrop?.cancel ? { cancel: snapDrop.cancel } : {}),
       ...(snapDrop?.review ? { review: snapDrop.review } : {}),
+      ...(snapDrop?.category ? { category: snapDrop.category } : {}),
     };
   }
   console.log(`Loaded ${Object.keys(state.drops).length} event(s) from Supabase`);

@@ -61,7 +61,7 @@ export class AgentRuns {
       goal === "buy"
         ? "Armed. Watching for tickets to go on sale."
         : goal === "resale"
-          ? "Checking resale listings from verified fans."
+          ? "Checking resale listings from verified ticket holders."
           : `Listing a ticket for resale at R${priceZar ?? 1250}.`;
     events.emit("agent.action", `${fanId}'s agent started: ${goal}`, { fanId, eventId: drop.id, tool: "run", detail });
     return { fanId, eventId: drop.id, goal, running: true };

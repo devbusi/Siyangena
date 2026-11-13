@@ -57,9 +57,9 @@ export function CancelEvent() {
             <h1 style={{ fontSize: "clamp(2.4rem, 6vw, 4.4rem)" }}>{cancelled ? `${drop?.name} is cancelled` : `Cancel ${drop?.name ?? "this event"}?`}</h1>
             {cancelled && c && (
               <div className="stack" style={{ gap: 12 }}>
-                <p style={{ fontSize: "1.15rem", maxWidth: 640 }}>Fans were told: "{c.reason}"</p>
+                <p style={{ fontSize: "1.15rem", maxWidth: 640 }}>Ticket holders were told: "{c.reason}"</p>
                 <p className="muted">
-                  {rand(c.refundedZar)} of {rand(c.totalZar)} is back with fans. Tickets for this event no longer get anyone in at the door.
+                  {rand(c.refundedZar)} of {rand(c.totalZar)} is back with ticket holders. Tickets for this event no longer get anyone in at the door.
                 </p>
                 <div>
                   <Button variant="ghost" onClick={() => navigate(`/promoter/events/${id}`)}>
@@ -73,10 +73,10 @@ export function CancelEvent() {
             )}
             {!cancelled && drop && drop.state !== "closed" && new Date(drop.startsAt).getTime() > Date.now() && (
               <>
-                <p style={{ fontSize: "1.15rem", maxWidth: 640 }}>Every fan gets their money back automatically, straight to their wallet. You can't undo this.</p>
+                <p style={{ fontSize: "1.15rem", maxWidth: 640 }}>Every ticket holder gets their money back automatically, straight to their wallet. You can't undo this.</p>
                 <div className="panel stack" style={{ gap: 8 }}>
                   <div className="row">
-                    <span>Fans holding tickets</span>
+                    <span>People holding tickets</span>
                     <strong className="num">{preview ? preview.holders : "…"}</strong>
                   </div>
                   <div className="row">
@@ -88,12 +88,12 @@ export function CancelEvent() {
                     <strong className="num">{preview ? rand(preview.resaleExtraZar) : "…"}</strong>
                   </div>
                   <div className="row" style={{ borderTop: "2.5px dashed #000", paddingTop: 8 }}>
-                    <strong>Total going back to fans</strong>
+                    <strong>Total going back to ticket holders</strong>
                     <strong className="num">{preview ? rand(preview.totalZar) : "…"}</strong>
                   </div>
                 </div>
                 <div className="field">
-                  <label htmlFor="why">Tell fans why (they'll see this)</label>
+                  <label htmlFor="why">Tell ticket holders why (they'll see this)</label>
                   <textarea id="why" className="input" style={{ minHeight: 96 }} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="The venue has flooded. We're so sorry, and we'll be back in the new year." />
                 </div>
                 <div className="field">
@@ -120,14 +120,14 @@ export function CancelEvent() {
         <aside className="desk-aside stack">
           <p style={{ fontWeight: 800 }}>{cancelled ? "Refunds" : "After you confirm"}</p>
           <div className="panel stack" style={{ background: "#8ec5ff", gap: 10 }}>
-            <h3>{c?.done ? "Everyone's been refunded" : "Refunding fans"}</h3>
+            <h3>{c?.done ? "Everyone's been refunded" : "Refunding ticket holders"}</h3>
             <p className="stat-value num" style={{ fontSize: "3.6rem" }}>
               {c ? `${c.refunded} of ${c.holders}` : preview ? `0 of ${preview.holders}` : "…"}
             </p>
             <div className="meter" aria-hidden="true">
               <motion.div initial={false} animate={{ width: `${c ? (c.holders ? (c.refunded / c.holders) * 100 : 100) : 0}%` }} />
             </div>
-            <p>Each fan gets an alert with your message. Their tickets stop working at the door.</p>
+            <p>Each ticket holder gets an alert with your message. Their tickets stop working at the door.</p>
           </div>
           {cancelled && (
             <Button variant="ghost" onClick={() => navigate("/promoter/payouts")}>
@@ -237,7 +237,7 @@ export function DoorScanner() {
         <span aria-hidden="true" style={{ position: "absolute", left: "50%", top: "45%", width: 190, height: 190, transform: "translate(-50%, -50%)", borderRadius: 10, border: "3px dashed rgba(255,255,255,.6)" }} />
         <div style={{ position: "absolute", left: 0, right: 0, bottom: 14, display: "grid", placeItems: "center", gap: 8 }}>
           {camera === "on" ? (
-            <p style={{ color: "#fff", fontWeight: 700 }}>Point the camera at the fan's ticket</p>
+            <p style={{ color: "#fff", fontWeight: 700 }}>Point the camera at the ticket</p>
           ) : (
             <Button variant="sun" onClick={() => setCamera("on")}>
               {camera === "blocked" ? "Camera blocked: try again" : "Start scanning"}
@@ -269,7 +269,7 @@ export function DoorScanner() {
           <div>
             <p style={{ fontWeight: 900, fontStretch: "62%", textTransform: "uppercase", fontSize: "2.2rem", lineHeight: 0.95 }}>{result.ok ? "Let them in" : result.reason === "used" ? "Already used" : "Don't let in"}</p>
             <p style={{ fontWeight: 700 }}>
-              {result.ok ? `${result.fanName ?? "Fan"}, ticket ${result.ticket} of ${result.of}` : `${result.fanName ? `${result.fanName}. ` : ""}${result.message}`}
+              {result.ok ? `${result.fanName ?? "Ticket holder"}, ticket ${result.ticket} of ${result.of}` : `${result.fanName ? `${result.fanName}. ` : ""}${result.message}`}
             </p>
           </div>
         </motion.div>
@@ -311,31 +311,12 @@ function when(iso?: string) {
 export function PromoterPayouts() {
   const { tick } = useApp();
   const [s, setS] = useState<PayoutSummary | null>(null);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [done, setDone] = useState("");
 
   const load = () => {
     api.payouts().then(setS).catch((e) => setError(e instanceof Error ? e.message : "Couldn't load payouts"));
   };
   useEffect(load, [tick]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const [busyId, setBusyId] = useState("");
-  async function request(eventId: string) {
-    setBusy(true);
-    setBusyId(eventId);
-    setError("");
-    try {
-      const p = await api.requestPayout(eventId);
-      setDone(`Requested ${rand(p.amountZar)} for ${p.eventName}. Siyangena pays it to ${p.bank ?? "your bank"}, usually the next working day.`);
-      load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't request a payout");
-    } finally {
-      setBusy(false);
-      setBusyId("");
-    }
-  }
 
   const paidToYou = s ? Number(s.paidZar) : 0;
   return (
@@ -364,7 +345,7 @@ export function PromoterPayouts() {
               <p className="faint">{s.kind === "business" ? "Registered business: paid as tickets sell" : "Independent: paid the morning after"}</p>
             </div>
             <div className="kpi">
-              <p style={{ fontWeight: 800 }}>Refunded to fans</p>
+              <p style={{ fontWeight: 800 }}>Refunded to ticket holders</p>
               <p className="stat-value num">{rand(s.refundedZar)}</p>
             </div>
           </div>
@@ -383,8 +364,7 @@ export function PromoterPayouts() {
                       <th>Resale fees</th>
                       <th>Refunded</th>
                       <th>Paid or on its way</th>
-                      <th>Ready to pay</th>
-                      <th></th>
+                      <th>Next payout</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -399,14 +379,8 @@ export function PromoterPayouts() {
                         <td className="num">{rand(e.feesZar)}</td>
                         <td className="num">{rand(e.refundedZar)}</td>
                         <td className="num">{rand(Number(e.paidZar) + Number(e.requestedZar))}</td>
-                        <td className="num">{e.held ? "Held until the event" : rand(e.availableZar)}</td>
-                        <td>
-                          {!e.held && Number(e.availableZar) > 0 && (
-                            <Button className="btn-sm" disabled={busy} onClick={() => request(e.eventId)}>
-                              {busyId === e.eventId ? "Requesting" : "Request payout"}
-                            </Button>
-                          )}
-                        </td>
+                        <td>{e.state === "cancelled" ? "Cancelled" : e.held ? `${rand(Number(e.netZar) - Number(e.paidZar) - Number(e.requestedZar))} the morning after` : Number(e.availableZar) > 0 ? `${rand(e.availableZar)} sending now` : "Up to date"}</td>
+
                       </tr>
                     ))}
                   </tbody>
@@ -415,17 +389,22 @@ export function PromoterPayouts() {
             </div>
             <aside className="desk-aside stack">
               <div className="panel stack" style={{ background: "var(--lilac)", gap: 8 }}>
-                <h2>Ready to pay</h2>
+                <h2>Next payout</h2>
                 <p className="stat-value num" style={{ fontSize: "3.4rem" }}>
-                  {rand(s.availableZar)}
+                  {rand(Number(s.heldZar) + Number(s.availableZar) + Number(s.requestedZar))}
                 </p>
-                <p>{s.bank ? `Paid to ${s.bank}.` : "Add your bank details in your account."} Request each event's payout from the table.</p>
-                {Number(s.requestedZar) > 0 && <p style={{ fontWeight: 700 }}>{rand(s.requestedZar)} already on its way.</p>}
-                {done && <p style={{ fontWeight: 700 }}>{done}</p>}
+                <p>
+                  {s.kind === "business"
+                    ? "Paid automatically as tickets sell."
+                    : s.nextPayoutAt
+                      ? `Paid automatically on ${new Date(s.nextPayoutAt).toLocaleDateString("en-ZA", { weekday: "long", day: "numeric", month: "long" })}, the morning after your event.`
+                      : "Paid automatically the morning after each event."}{" "}
+                  {s.bank ? `To ${s.bank}.` : "Add your bank details in your account."}
+                </p>
                 {error && <p style={{ fontWeight: 700 }}>{error}</p>}
               </div>
               {s.kind === "independent" && (
-                <p className="callout">Ticket money is held safely until the morning after your event. If it's cancelled, every fan is refunded automatically.</p>
+                <p className="callout">Ticket money is held safely until the morning after your event. If it's cancelled, every ticket holder is refunded automatically.</p>
               )}
             </aside>
           </div>
@@ -438,7 +417,7 @@ export function PromoterPayouts() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Requested</th>
+                    <th>Date</th>
                     <th>Event</th>
                     <th>Amount</th>
                     <th>To</th>
@@ -466,7 +445,7 @@ export function PromoterPayouts() {
                             )}
                           </>
                         ) : (
-                          "On its way"
+                          "Sending"
                         )}
                       </td>
                     </tr>
@@ -511,16 +490,16 @@ export function AdminPayouts() {
       <Enter>
         <h1 style={{ margin: "10px 0 6px" }}>Payouts</h1>
         <p className="muted" style={{ marginBottom: 18 }}>
-          Promoters request a payout per event. Send bank transfer moves the money from the platform wallet to the bank wallet on the ledger and records the bank transfer reference for the promoter.
+          Payouts run automatically: as soon as an event's money is due, it moves from the platform wallet to the bank wallet on the ledger and a bank transfer goes to the promoter. Anything that didn't go through shows here to send again.
         </p>
       </Enter>
       {!list ? (
         <p className="muted">Loading payouts</p>
       ) : list.length === 0 ? (
-        <p className="callout">No payout requests yet.</p>
+        <p className="callout">No payouts yet. They appear here as events earn money.</p>
       ) : (
         <div className="panel" style={{ overflowX: "auto" }}>
-          <p style={{ fontWeight: 800, marginBottom: 8 }}>{waiting.length ? `${waiting.length} waiting to be paid` : "All paid"}</p>
+          <p style={{ fontWeight: 800, marginBottom: 8 }}>{waiting.length ? `${waiting.length} still sending` : "All sent"}</p>
           {error && <p className="callout callout-blocked">{error}</p>}
           <table className="table">
             <thead>
@@ -556,7 +535,7 @@ export function AdminPayouts() {
                       </>
                     ) : (
                       <Button className="btn-sm" disabled={busy === p.id} onClick={() => paid(p.id)}>
-                        {busy === p.id ? "Sending" : "Send bank transfer"}
+                        {busy === p.id ? "Sending" : "Send again"}
                       </Button>
                     )}
                   </td>

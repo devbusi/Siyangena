@@ -68,7 +68,7 @@ function EventReviews() {
               <div className="row">
                 <span>Tickets</span>
                 <strong>
-                  {d.supply}, up to {d.maxPerFan} per fan
+                  {d.supply}, up to {d.maxPerFan} per person
                 </strong>
               </div>
               <div className="row">
@@ -385,7 +385,7 @@ export function AdminPeople() {
                     Role for {u.email}
                   </label>
                   <select id={`role-${u.id}`} className="input" style={{ minHeight: 40, width: "auto" }} value={u.role} onChange={(e) => changeRole(u.id, e.target.value as Role)}>
-                    <option value="fan">Fan</option>
+                    <option value="fan">Ticket holder</option>
                     <option value="promoter">Promoter</option>
                     <option value="admin">Admin</option>
                   </select>
@@ -425,7 +425,7 @@ export function AdminOverview() {
   return (
     <div className="desk">
       <TopBar />
-      <Marquee rows={[["Admin", "Real promoters only", "Fans protected", "No touts"]]} size={34} speed={36} />
+      <Marquee rows={[["Admin", "Real promoters only", "Ticket holders protected", "No touts"]]} size={34} speed={36} />
       <Enter>
         <h1 style={{ margin: "8px 0 6px" }}>Overview</h1>
         <p className="muted">You approve every promoter before their events can go on sale, and look after everyone's roles.</p>

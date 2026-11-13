@@ -91,9 +91,9 @@ const base = (o: Partial<Drop> & Pick<Drop, "id" | "name" | "venue" | "startsAt"
 });
 
 const drops: Drop[] = [
-  base({ id: "drop_sunset", name: "Sunset Sessions Live", venue: "Long Street, Cape Town", city: "Cape Town", scene: "longstreet", startsAt: "2026-12-12T19:00:00+02:00", promoterId: "u_promoter", promoterName: "Khaya Nights" }),
-  base({ id: "drop_braam", name: "Braam Rooftop Sessions", venue: "Braamfontein, Johannesburg", city: "Johannesburg", scene: "braamfontein", startsAt: "2026-12-18T20:00:00+02:00", priceZar: "250", priceRlusd: String(250 / FX), supply: 200, resaleCapZar: "300", promoterId: "u_other", promoterName: "Braam Collective" }),
-  base({ id: "drop_florida", name: "Florida Road Sundowner", venue: "Florida Road, Durban", city: "Durban", scene: "floridaroad", startsAt: "2026-12-19T16:00:00+02:00", priceZar: "180", priceRlusd: String(180 / FX), supply: 300, resaleCapZar: "220", promoterId: "u_other", promoterName: "Morningside Socials" }),
+  base({ id: "drop_sunset", category: "Music", name: "Sunset Sessions Live", venue: "Long Street, Cape Town", city: "Cape Town", scene: "longstreet", startsAt: "2026-12-12T19:00:00+02:00", promoterId: "u_promoter", promoterName: "Khaya Nights" }),
+  base({ id: "drop_braam", category: "Nightlife", name: "Braam Rooftop Sessions", venue: "Braamfontein, Johannesburg", city: "Johannesburg", scene: "braamfontein", startsAt: "2026-12-18T20:00:00+02:00", priceZar: "250", priceRlusd: String(250 / FX), supply: 200, resaleCapZar: "300", promoterId: "u_other", promoterName: "Braam Collective" }),
+  base({ id: "drop_florida", category: "Food and drink", name: "Florida Road Sundowner", venue: "Florida Road, Durban", city: "Durban", scene: "floridaroad", startsAt: "2026-12-19T16:00:00+02:00", priceZar: "180", priceRlusd: String(180 / FX), supply: 300, resaleCapZar: "220", promoterId: "u_other", promoterName: "Morningside Socials" }),
 ];
 
 interface Account {
@@ -353,7 +353,7 @@ export const mockApi: Api = {
   purchase: async (requestId) => (purchases[requestId] ? { status: purchases[requestId] } : null),
   runAgent: async (eventId, goal: AgentGoal, priceZar) => {
     const u = who();
-    emit("agent.action", { fanId: u.id, eventId, tool: "run", detail: goal === "buy" ? "Armed. Watching for tickets to go on sale." : "Checking resale listings from verified fans." });
+    emit("agent.action", { fanId: u.id, eventId, tool: "run", detail: goal === "buy" ? "Armed. Watching for tickets to go on sale." : "Checking resale listings from verified ticket holders." });
     if (goal === "buy") agentBuy(u.id, eventId).catch(() => undefined);
     if (goal === "sell") sell(u.id, eventId, priceZar ?? 1250);
   },
@@ -527,6 +527,12 @@ export const mockApi: Api = {
       const available = held ? 0 : Math.max(0, net - paid - requested);
       return { eventId: d.id, name: d.name, startsAt: d.startsAt, state: d.state, salesZar: sales.toFixed(2), feesZar: fees.toFixed(2), refundedZar: refunded.toFixed(2), held, netZar: net.toFixed(2), requestedZar: requested.toFixed(2), paidZar: paid.toFixed(2), availableZar: available.toFixed(2) };
     });
+    // Payouts are automatic: anything due goes straight out.
+    const due = lines.filter((l) => Number(l.availableZar) > 0);
+    if (due.length) {
+      for (const l of due) payoutList.unshift({ id: `payout_${Date.now()}_${l.eventId}`, promoterId: u.id, promoterName: u.fullName, eventId: l.eventId, eventName: l.name, amountZar: l.availableZar, status: "paid", bank: "FNB, account ending 4417", createdAt: new Date().toISOString(), paidAt: new Date().toISOString(), reference: ref("PAY"), explorerUrl: "#receipt" });
+      return mockApi.payouts();
+    }
     const sum = (k: "netZar" | "feesZar" | "refundedZar" | "availableZar") => lines.reduce((n, l) => n + Number(l[k]), 0);
     const held = lines.filter((l) => l.held).reduce((n, l) => n + Number(l.netZar) - Number(l.paidZar) - Number(l.requestedZar), 0);
     return {
@@ -540,6 +546,9 @@ export const mockApi: Api = {
       refundedZar: sum("refundedZar").toFixed(2),
       kind: applications[u.id]?.kind ?? "independent",
       bank: "FNB, account ending 4417",
+      ...(applications[u.id]?.kind !== "business" && mine.some((d) => d.state !== "cancelled" && new Date(d.startsAt).getTime() + 864e5 > Date.now())
+        ? { nextPayoutAt: new Date(Math.min(...mine.filter((d) => d.state !== "cancelled").map((d) => new Date(d.startsAt).getTime())) + 864e5).toISOString() }
+        : {}),
       events: lines,
       history,
     };
@@ -557,6 +566,22 @@ export const mockApi: Api = {
   reviewEvent: async (id, decision, note) => {
     const d = drop(id);
     d.review = { status: decision, ...(note ? { note } : {}), submittedAt: d.review?.submittedAt ?? new Date().toISOString(), reviewedAt: new Date().toISOString() };
+    return { ...d };
+  },
+  editEvent: async (id, body) => {
+    const d = drop(id);
+    if (!d.review || d.review.status === "approved") throw new Error("This event is approved. Only the per-person limit, resale cap and fee can change now.");
+    if (body.name) d.name = body.name;
+    if (body.category) d.category = body.category as Drop["category"];
+    if (body.venue) d.venue = body.venue;
+    if (body.city !== undefined) d.city = body.city || undefined;
+    if (body.startsAt) d.startsAt = body.startsAt;
+    if (body.priceZar) d.priceZar = String(body.priceZar);
+    if (body.maxPerFan) d.maxPerFan = body.maxPerFan;
+    if (body.resaleCapZar) d.resaleCapZar = String(body.resaleCapZar);
+    if (body.resaleFeePct !== undefined) d.resaleFeePct = body.resaleFeePct;
+    if (body.posterUrl !== undefined) d.posterUrl = body.posterUrl || undefined;
+    if (body.resubmit && d.review.status === "needs_more") d.review = { status: "pending", submittedAt: new Date().toISOString() };
     return { ...d };
   },
   resubmitEvent: async (id) => {

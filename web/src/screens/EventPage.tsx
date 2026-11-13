@@ -12,7 +12,7 @@ import { useApp, useDrop } from "../lib/store";
 const PROMISES = [
   { title: "Checked promoter", body: "We check every promoter before their event goes on sale, so every ticket traces back to them." },
   { title: "One verified person, one wallet", body: "Bots can't fake an ID check, so they can't buy here." },
-  { title: "Resale stays fair", body: "Fans resell through Siyangena only, capped at the promoter's price." },
+  { title: "Resale stays fair", body: "Ticket holders resell through Siyangena only, capped at the promoter's price." },
   { title: "Fakes can't reach you", body: "Your wallet only accepts the real ticket for this event." },
 ];
 
@@ -88,7 +88,7 @@ export function EventPage() {
         <Ticker
           items={[
             drop.state === "open" ? "Tickets on sale now" : soldOut ? "Sold out: fair resale only" : "Tickets on sale soon",
-            "Verified fans only",
+            "Verified ticket holders only",
             `Resale capped at ${rand(drop.resaleCapZar)}`,
             "No fakes, no scalpers",
           ]}
@@ -118,7 +118,7 @@ export function EventPage() {
                   <p className="stat-value num">{rand(drop.priceZar)}</p>
                 </div>
                 <div className="panel">
-                  <p className="faint">Per fan</p>
+                  <p className="faint">Per person</p>
                   <p className="stat-value num">{drop.maxPerFan} max</p>
                 </div>
                 <div className="panel">
@@ -127,7 +127,7 @@ export function EventPage() {
                 </div>
               </div>
               <p className="faint" style={{ margin: "-8px 0 18px" }}>
-                The promoter sets the limit per fan and the resale cap for this event.
+                The promoter sets the limit per person and the resale cap for this event.
               </p>
             </Enter>
 
@@ -189,7 +189,14 @@ export function EventPage() {
       </div>
 
       <div className="bottom-bar">
-        {drop.state === "cancelled" ? (
+        {me && drop.promoterId === me.id && drop.state !== "cancelled" ? (
+          <div className="bottom-bar-inner stack panel" style={{ gap: 8 }}>
+            <p style={{ fontWeight: 800 }}>This is your event, so you can't buy tickets to it.</p>
+            <Button variant="ghost" block onClick={() => navigate(`/promoter/events/${drop.id}`)}>
+              Open the control room
+            </Button>
+          </div>
+        ) : drop.state === "cancelled" ? (
           <div className="bottom-bar-inner stack panel" style={{ gap: 8, background: "var(--coral-wash)" }}>
             <p style={{ fontWeight: 800 }}>This event was cancelled. {drop.cancel?.reason}</p>
             <p className="muted">Everyone with a ticket is refunded to their Siyangena wallet automatically.</p>
@@ -303,7 +310,7 @@ export function BuyTickets() {
               <div className="panel row">
                 <div>
                   <strong>Tickets</strong>
-                  <p className="faint">Up to {max} per fan, set by the promoter</p>
+                  <p className="faint">Up to {max} per person, set by the promoter</p>
                 </div>
                 <div className="stepper">
                   <button type="button" aria-label="One ticket fewer" onClick={() => setQty((q) => Math.max(1, q - 1))}>
@@ -343,7 +350,7 @@ export function BuyTickets() {
                   </Button>
                 </div>
               )}
-              <p className="faint">Verified fans only, at face value. The per-fan limit counts every ticket you hold, including any your agent buys.</p>
+              <p className="faint">Verified ticket holders only, at face value. The per-person limit counts every ticket you hold, including any your agent buys.</p>
               {error && (
                 <p role="alert" className="callout callout-blocked">
                   {error}
@@ -376,5 +383,80 @@ export function BuyTickets() {
         </div>
       </div>
     </>
+  );
+}
+
+// The fan's page for an event, as a preview: what fans will see once it's live.
+// Used on the promoter's event page and in the admin's event review. Buttons don't act.
+export function EventAdvert({ drop }: { drop: Drop }) {
+  const pill = salePill(drop);
+  return (
+    <div className="panel stack" style={{ gap: 14, marginTop: 16 }}>
+      <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
+        <span className="pill" style={{ background: "var(--sun)" }}>
+          Public page preview
+        </span>
+        <span className="faint">This is what people see once it's approved and listed.</span>
+      </div>
+      <div className="event-layout" style={{ marginTop: 0 }}>
+        <section className="event-hero">
+          <div className="art-box" style={{ height: 240 }}>
+            <EventArt drop={drop} />
+          </div>
+          <div className="row" style={{ marginTop: 16 }}>
+            <span className={`pill ${pill.tone}`}>{pill.label}</span>
+            <span className="faint">{dateLong(drop.startsAt)}</span>
+          </div>
+          <h2 className="hero-title" style={{ fontSize: "clamp(2.2rem, 5vw, 3.6rem)" }}>
+            {drop.name}
+          </h2>
+          <p className="hero-meta">
+            {drop.venue}
+            {drop.city && !drop.venue.includes(drop.city) ? `, ${drop.city}` : ""}
+          </p>
+          {drop.promoterName && <p className="faint">By {drop.promoterName}</p>}
+        </section>
+        <div className="event-side">
+          <div className="price-row">
+            <div className="panel">
+              <p className="faint">Ticket</p>
+              <p className="stat-value num">{rand(drop.priceZar)}</p>
+            </div>
+            <div className="panel">
+              <p className="faint">Per person</p>
+              <p className="stat-value num">{drop.maxPerFan} max</p>
+            </div>
+            <div className="panel">
+              <p className="faint">Resale cap</p>
+              <p className="stat-value num">{rand(drop.resaleCapZar)}</p>
+            </div>
+          </div>
+          <ul className="promise-list" style={{ marginTop: 6 }}>
+            {PROMISES.map((p) => (
+              <li key={p.title}>
+                <span className="promise-icon" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 13l4 4L19 7" />
+                  </svg>
+                </span>
+                <span>
+                  <strong>{p.title}</strong>
+                  <br />
+                  <span className="muted">{p.body}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="stack" style={{ gap: 8, marginTop: 12 }} aria-hidden="true">
+            <Button block tabIndex={-1} style={{ pointerEvents: "none" }}>
+              {drop.state === "open" ? "Buy tickets" : "Buy when sales open"}
+            </Button>
+            <Button variant="lilac" block tabIndex={-1} style={{ pointerEvents: "none" }}>
+              Add an agent
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

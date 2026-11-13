@@ -41,9 +41,9 @@ function nameFor(address: string): string {
       const [first, ...rest] = full.split(/\s+/);
       return rest.length ? `${first} ${rest[rest.length - 1][0]}.` : first;
     }
-    return "Fan";
+    return "Ticket holder";
   }
-  return fanService.allContexts().find((c) => c.agent.address === address)?.name ?? "Fan";
+  return fanService.allContexts().find((c) => c.agent.address === address)?.name ?? "Ticket holder";
 }
 
 export class Door {

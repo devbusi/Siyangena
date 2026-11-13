@@ -61,7 +61,7 @@ export function Mandate() {
             <div className="panel row">
               <div>
                 <strong>Tickets</strong>
-                <p className="faint">Up to {max} per fan</p>
+                <p className="faint">Up to {max} per person</p>
               </div>
               <div className="stepper">
                 <button type="button" aria-label="One ticket fewer" onClick={() => setQty((q) => Math.max(1, q - 1))}>

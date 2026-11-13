@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import type { BankTransfer, Drop, FanTickets, FanWallet } from "@drop/shared";
+import { EVENT_CATEGORIES, type BankTransfer, type Drop, type FanTickets, type FanWallet } from "@drop/shared";
 import { Button, Enter, Marquee, Ticket, TopBar } from "../components/ui";
 import { CityArt, SCENES, type Scene } from "../components/CityArt";
 import { DoorPass } from "../components/DoorPass";
@@ -34,15 +34,15 @@ export function salePill(drop: Drop): { label: string; tone: string } {
 
 export function Discover() {
   const { drops } = useApp();
-  const [city, setCity] = useState("All");
+  const [cat, setCat] = useState<string>("All");
   const [q, setQ] = useState("");
-  // Cities come from the events themselves, so anywhere in the country shows up.
-  const cities = ["All", ...Array.from(new Set(drops.map((d) => d.city).filter((c): c is string => Boolean(c)))).sort()];
+  // Kinds of event, with towns left to the search box so anywhere in the country works.
+  const cats = ["All", ...EVENT_CATEGORIES.filter((c) => drops.some((d) => d.category === c))];
   const needle = q.trim().toLowerCase();
   const shown = drops.filter(
     (d) =>
-      (city === "All" || d.city === city) &&
-      (!needle || [d.name, d.venue, d.city, d.promoterName].some((v) => v?.toLowerCase().includes(needle))),
+      (cat === "All" || d.category === cat) &&
+      (!needle || [d.name, d.venue, d.city, d.promoterName, d.category].some((v) => v?.toLowerCase().includes(needle))),
   );
 
   return (
@@ -60,9 +60,9 @@ export function Discover() {
               <input id="search" className="input" type="search" placeholder="Search events, venues, towns" value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
           </div>
-          <div className="chips" role="group" aria-label="City" style={{ marginTop: 14 }}>
-            {cities.map((c) => (
-              <motion.button key={c} type="button" className="chip" aria-pressed={city === c} whileTap={{ scale: 0.92 }} onClick={() => setCity(c)}>
+          <div className="chips" role="group" aria-label="Kind of event" style={{ marginTop: 14 }}>
+            {cats.map((c) => (
+              <motion.button key={c} type="button" className="chip" aria-pressed={cat === c} whileTap={{ scale: 0.92 }} onClick={() => setCat(c)}>
                 {c}
               </motion.button>
             ))}
@@ -70,7 +70,7 @@ export function Discover() {
         </Enter>
         {shown.length === 0 ? (
           <div className="callout stack" style={{ gap: 6, marginTop: 18 }}>
-            <strong>{needle || city !== "All" ? "Nothing matches that" : "No events yet"}</strong>
+            <strong>{needle || cat !== "All" ? "Nothing matches that" : "No events yet"}</strong>
             <p className="muted">New events show up the moment a promoter creates them. Add who you want to see to your wishlist.</p>
           </div>
         ) : (

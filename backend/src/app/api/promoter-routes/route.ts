@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { Drop } from "../../../application-logic/drop-logic/Drop";
 import { accounts } from "../../../application-logic/account-logic/Accounts";
-import { CreateDropDto, UpdateDropDto } from "../../../dto/drop.dto";
+import { CreateDropDto, EditDropDto, UpdateDropDto } from "../../../dto/drop.dto";
 import { CancelDto, CheckinDto } from "../../../dto/account.dto";
 import { alerts } from "../../../application-logic/alert-logic/Alerts";
 import { cancelEvent, cancelPreview } from "../../../application-logic/drop-logic/Cancel";
@@ -89,6 +89,15 @@ router.patch("/events/:eventId", validate(UpdateDropDto), async (req: Request, r
     res.json({ success: true, data: dropService.updateDrop(req.body as UpdateDropDto, req.params.eventId as string) });
   } catch (error) {
     sendError(res, error, "Failed to update event");
+  }
+});
+
+router.patch("/events/:eventId/details", validate(EditDropDto), async (req: Request, res: Response) => {
+  try {
+    assertCanManage(req.params.eventId as string, who(req));
+    res.json({ success: true, data: dropService.editDetails(req.params.eventId as string, req.body as EditDropDto) });
+  } catch (error) {
+    sendError(res, error, "Failed to save the event");
   }
 });
 

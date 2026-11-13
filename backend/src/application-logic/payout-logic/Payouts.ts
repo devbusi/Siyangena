@@ -72,6 +72,12 @@ export class Payouts {
           availableZar: zar(availableE),
         };
       });
+    // Independent promoters: the next payout is the morning after their next held event.
+    const heldDates = Object.values(state.drops)
+      .filter((d) => d.promoterId === promoterId && kind === "independent" && d.state !== "cancelled" && new Date(d.startsAt).getTime() + DAY > now)
+      .map((d) => new Date(new Date(d.startsAt).getTime() + DAY).toISOString())
+      .sort();
+    const nextDate = heldDates[0];
     const paid = history.filter((p) => p.status === "paid").reduce((n, p) => n + Number(p.amountZar), 0);
     const requested = history.filter((p) => p.status === "requested").reduce((n, p) => n + Number(p.amountZar), 0);
     const bank = maskBank(application?.payoutDetails);
@@ -86,6 +92,7 @@ export class Payouts {
       refundedZar: zar(refunded),
       kind,
       ...(bank ? { bank } : {}),
+      ...(nextDate ? { nextPayoutAt: nextDate } : {}),
       events: lines,
       history,
     };
@@ -113,6 +120,53 @@ export class Payouts {
     state.payouts[payout.id] = payout;
     save();
     return payout;
+  }
+
+  // Payouts are automatic: whatever an event has earned and isn't held is sent to the
+  // promoter's bank. Runs on a timer; a failed send stays "requested" and is retried.
+  private running = false;
+  async autoRun(): Promise<void> {
+    if (this.running) return;
+    this.running = true;
+    try {
+      const promoters = new Set(Object.values(state.drops).map((d) => d.promoterId).filter((x): x is string => Boolean(x)));
+      for (const promoterId of promoters) {
+        const s = await this.summary(promoterId);
+        const name = accounts.cachedProfile(promoterId)?.fullName ?? undefined;
+        for (const line of s.events) {
+          if (line.held || Number(line.availableZar) <= 0) continue;
+          const payout: Payout = {
+            id: newId("payout"),
+            promoterId,
+            ...(name ? { promoterName: name } : {}),
+            eventId: line.eventId,
+            eventName: line.name,
+            amountZar: line.availableZar,
+            status: "requested",
+            ...(s.bank ? { bank: s.bank } : {}),
+            createdAt: nowIso(),
+          };
+          state.payouts[payout.id] = payout;
+          save();
+        }
+      }
+      for (const p of Object.values(state.payouts)) {
+        if (p.status !== "requested") continue;
+        try {
+          await this.markPaid(p.id);
+        } catch (error) {
+          console.error(`Payout ${p.id} not sent yet:`, error instanceof Error ? error.message : error);
+        }
+      }
+    } finally {
+      this.running = false;
+    }
+  }
+
+  start() {
+    const tick = () => void this.autoRun().catch((e) => console.error("Payout run failed:", e instanceof Error ? e.message : e));
+    setTimeout(tick, 10_000);
+    setInterval(tick, 60_000);
   }
 
   all(): Payout[] {

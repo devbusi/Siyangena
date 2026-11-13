@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { ACTIVE, type PromoterStats } from "@drop/shared";
+import { ACTIVE, EVENT_CATEGORIES, type EventCategory, type PromoterStats } from "@drop/shared";
 import { Button, Enter, FeedRow, Marquee, TopBar } from "../components/ui";
 import { CityArt, SCENES, type Scene } from "../components/CityArt";
 import { api } from "../lib/api";
@@ -10,7 +10,7 @@ import { mockDemo } from "../lib/mock";
 import { describe, rand, time } from "../lib/format";
 import { useApp } from "../lib/store";
 import { useAuth } from "../lib/auth";
-import { useEvent } from "./EventPage";
+import { EventAdvert, useEvent } from "./EventPage";
 import { EventArt, salePill } from "./FanHome";
 import { dateLong } from "../lib/format";
 import { SA_PLACES } from "../lib/places";
@@ -56,6 +56,9 @@ export function PromoterDesk() {
   const open = drop?.state === "open";
   const cancelled = drop?.state === "cancelled";
   const reviewed = !drop?.review || drop.review.status === "approved";
+  const [view, setView] = useState<"control" | "fan">("control");
+  const [editingRules, setEditingRules] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(false);
   const refunding = cancelled && drop?.cancel && !drop.cancel.done;
   // Refunds run in the background: keep the progress moving.
   useEffect(() => {
@@ -89,12 +92,12 @@ export function PromoterDesk() {
   return (
     <div className="desk">
       <TopBar back={me?.role === "admin" ? "/admin/events" : "/promoter/events"} />
-      <Marquee rows={[[drop ? drop.name : "Your event", "Verified fans only", "Resale at your price", "Live"]]} size={34} speed={36} />
+      <Marquee rows={[[drop ? drop.name : "Your event", "Verified ticket holders only", "Resale at your price", "Live"]]} size={34} speed={36} />
       {!drop ? (
         <Enter>
           <div className="stack" style={{ maxWidth: 520, margin: "40px auto", textAlign: "center" }}>
             <h1>Your first event</h1>
-            <p className="muted">Get verified, then create an event. Fans' agents buy within their limits and resale stays at your price.</p>
+            <p className="muted">Get verified, then create an event. Agents buy within each person's limits and resale stays at your price.</p>
             <Button onClick={() => navigate("/promoter/onboard")}>Get verified</Button>
           </div>
         </Enter>
@@ -114,7 +117,7 @@ export function PromoterDesk() {
                 <h1 style={{ marginTop: 10, fontSize: "clamp(2.6rem, 6vw, 4.2rem)" }}>{drop.name}</h1>
                 <p className="hero-meta">{drop.venue}</p>
               </div>
-              {owner && cancelled ? null : owner ? (
+              {owner && (cancelled || !reviewed) ? null : owner ? (
               <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                 <Button variant="ghost" onClick={() => navigate(`/promoter/events/${id}/door`)}>
                   Door scanner
@@ -129,9 +132,11 @@ export function PromoterDesk() {
                     Close sales
                   </Button>
                 ) : (
-                  <Button variant="sun" disabled={busy || drop.state === "sold_out" || !reviewed} onClick={() => run(() => api.openSales(id!))}>
-                    {reviewed ? "Open sales" : "Open sales after review"}
-                  </Button>
+                  drop.state !== "sold_out" && drop.state !== "closed" && (
+                    <Button variant="sun" disabled={busy} onClick={() => run(() => api.openSales(id!))}>
+                      Open sales
+                    </Button>
+                  )
                 )}
               </div>
               ) : (
@@ -156,7 +161,7 @@ export function PromoterDesk() {
                   </li>
                 </ol>
                 {drop.review.status === "pending" ? (
-                  <p className="muted">A person on our team checks every event, usually within a few hours. Fans can't see it until it's approved.</p>
+                  <p className="muted">A person on our team checks every event, usually within a few hours. Nobody can see it until it's approved.</p>
                 ) : (
                   <>
                     <p>
@@ -174,7 +179,7 @@ export function PromoterDesk() {
             )}
             {cancelled && drop.cancel && (
               <div className="panel stack" style={{ marginTop: 12, background: "#8ec5ff", gap: 8 }}>
-                <p style={{ fontWeight: 800 }}>{drop.cancel.done ? "Everyone's been refunded" : "Refunding fans"}</p>
+                <p style={{ fontWeight: 800 }}>{drop.cancel.done ? "Everyone's been refunded" : "Refunding ticket holders"}</p>
                 <p className="stat-value num">
                   {drop.cancel.refunded} of {drop.cancel.holders}
                 </p>
@@ -182,7 +187,7 @@ export function PromoterDesk() {
                   <motion.div initial={false} animate={{ width: `${drop.cancel.holders ? (drop.cancel.refunded / drop.cancel.holders) * 100 : 100}%` }} />
                 </div>
                 <p>
-                  {rand(drop.cancel.refundedZar)} of {rand(drop.cancel.totalZar)} back with fans. They were told: "{drop.cancel.reason}"
+                  {rand(drop.cancel.refundedZar)} of {rand(drop.cancel.totalZar)} back with ticket holders. They were told: "{drop.cancel.reason}"
                 </p>
               </div>
             )}
@@ -193,6 +198,36 @@ export function PromoterDesk() {
             )}
           </Enter>
 
+          {reviewed && (
+            <div className="chips" role="radiogroup" aria-label="View" style={{ marginTop: 14 }}>
+              <button type="button" role="radio" aria-checked={view === "control"} className="chip" onClick={() => setView("control")}>
+                Control room
+              </button>
+              <button type="button" role="radio" aria-checked={view === "fan"} className="chip" onClick={() => setView("fan")}>
+                Public page
+              </button>
+            </div>
+          )}
+          {!reviewed && owner && !cancelled && (
+            <div className="row" style={{ marginTop: 14, gap: 8, justifyContent: "flex-start" }}>
+              {!editingEvent && <EditIcon label="Edit event details" onClick={() => setEditingEvent(true)} withText />}
+            </div>
+          )}
+          {!reviewed && editingEvent ? (
+            <EditEventForm
+              drop={drop}
+              needsChanges={drop.review?.status === "needs_more"}
+              onCancel={() => setEditingEvent(false)}
+              onSaved={() => {
+                setEditingEvent(false);
+                refreshDrop();
+                refreshDrops();
+              }}
+            />
+          ) : !reviewed || view === "fan" ? (
+            <EventAdvert drop={drop} />
+          ) : (
+          <>
           <Enter delay={0.06}>
             <div className="kpis">
               <div className="kpi">
@@ -224,21 +259,24 @@ export function PromoterDesk() {
                   className="panel stack"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    run(() => api.updateEvent(id!, { resaleCapZar: capN, resaleFeePct: Number(fee), maxPerFan: Number(perFan) }), "Saved. New sales follow these rules.");
+                    run(() => api.updateEvent(id!, { resaleCapZar: capN, resaleFeePct: Number(fee), maxPerFan: Number(perFan) }), "Saved. New sales follow these rules.").then(() => setEditingRules(false));
                   }}
                 >
-                  <h2 style={{ fontSize: "1.8rem" }}>{owner ? "Your rules" : "Rules"}</h2>
-                  <fieldset disabled={!owner} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 14 }}>
+                  <div className="row">
+                    <h2 style={{ fontSize: "1.8rem" }}>{owner ? "Your rules" : "Rules"}</h2>
+                    {owner && !editingRules && <EditIcon label="Edit rules" onClick={() => setEditingRules(true)} />}
+                  </div>
+                  <fieldset disabled={!owner || !editingRules} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 14 }}>
                   <div className="field">
-                    <label htmlFor="perfan">Tickets per fan</label>
+                    <label htmlFor="perfan">Tickets per person</label>
                     <input id="perfan" className="input" inputMode="numeric" value={perFan} onChange={(e) => setPerFan(e.target.value)} />
-                    <p className="faint">Counts every ticket a fan holds or has reserved, across agents and resale.</p>
+                    <p className="faint">Counts every ticket a person holds or has reserved, across agents and resale.</p>
                   </div>
                   <div className="field">
                     <label htmlFor="cap">Resale cap per ticket</label>
                     <input id="cap" className="input" inputMode="numeric" value={cap} onChange={(e) => setCap(e.target.value)} />
                     <p className="faint">
-                      {face ? (capN <= face ? "Fans can only resell at face value or less." : `Up to ${Math.round((capN / face - 1) * 100)}% over face value of ${rand(face)}.`) : ""}
+                      {face ? (capN <= face ? "Ticket holders can only resell at face value or less." : `Up to ${Math.round((capN / face - 1) * 100)}% over face value of ${rand(face)}.`) : ""}
                     </p>
                   </div>
                   <div className="field">
@@ -247,10 +285,24 @@ export function PromoterDesk() {
                     <p className="faint">The buyer pays it. On a {rand(capN || face)} resale you earn {rand(((capN || face) * (Number(fee) || 0)) / 100, true)}.</p>
                   </div>
                   </fieldset>
-                  {owner && (
-                    <Button type="submit" block disabled={busy}>
-                      Save rules
-                    </Button>
+                  {owner && editingRules && (
+                    <div className="row" style={{ gap: 8 }}>
+                      <Button type="submit" style={{ flex: 1 }} disabled={busy}>
+                        Save rules
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => {
+                          setEditingRules(false);
+                          setCap(String(Number(drop.resaleCapZar)));
+                          setFee(String(drop.resaleFeePct));
+                          setPerFan(String(drop.maxPerFan));
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
                   )}
                   <AnimatePresence>
                     {saved && (
@@ -270,7 +322,7 @@ export function PromoterDesk() {
                   <h3>Where the money goes</h3>
                   <div className="breakdown">
                     <div className="row">
-                      <span>Ticket sales, paid to you instantly</span>
+                      <span>Ticket sales</span>
                       <span className="num">{rand(stats ? toZar(stats.revenueRlusd) : drop.sold * face)}</span>
                     </div>
                     <div className="row">
@@ -313,7 +365,7 @@ export function PromoterDesk() {
                         .slice(0, 40)
                         .map((e, i) => {
                           const d = describe(e);
-                          const who = e.fanId && e.fanId.length < 12 ? `${e.fanId[0].toUpperCase()}${e.fanId.slice(1)}: ` : e.fanId ? "A fan: " : "";
+                          const who = e.fanId && e.fanId.length < 12 ? `${e.fanId[0].toUpperCase()}${e.fanId.slice(1)}: ` : e.fanId ? "A ticket holder: " : "";
                           return <FeedRow key={`${e.at}-${e.type}-${events.length - i}`} title={who + d.title} detail={d.detail} tone={d.tone} at={time(e.at)} receipt={e.explorerUrl} />;
                         })}
                     </AnimatePresence>
@@ -322,6 +374,8 @@ export function PromoterDesk() {
               </section>
             </Enter>
           </div>
+          </>
+          )}
         </>
       )}
     </div>
@@ -329,6 +383,140 @@ export function PromoterDesk() {
 }
 
 // ---------- Promoter home: apply, wait for review, or run events ----------
+
+// A round pencil button: details stay locked until it's pressed.
+function EditIcon({ label, onClick, withText }: { label: string; onClick: () => void; withText?: boolean }) {
+  return (
+    <button type="button" className={withText ? "btn btn-ghost btn-sm" : "plus-btn"} aria-label={label} title={label} onClick={onClick} style={withText ? { gap: 8 } : { width: 40, height: 40 }}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M4 20h4L19 9l-4-4L4 16v4z" />
+        <path d="M14 6l4 4" />
+      </svg>
+      {withText && label}
+    </button>
+  );
+}
+
+// Change an event while it's in review. Supply was fixed on the ledger at creation.
+function EditEventForm({ drop, needsChanges, onCancel, onSaved }: { drop: Drop; needsChanges: boolean; onCancel: () => void; onSaved: () => void }) {
+  const toLocal = (iso: string) => {
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  const [name, setName] = useState(drop.name);
+  const [category, setCategory] = useState<EventCategory>(drop.category ?? "Music");
+  const [venue, setVenue] = useState(drop.venue);
+  const [city, setCity] = useState(drop.city ?? "");
+  const [date, setDate] = useState(toLocal(drop.startsAt));
+  const [price, setPrice] = useState(String(Number(drop.priceZar)));
+  const [perFan, setPerFan] = useState(String(drop.maxPerFan));
+  const [cap, setCap] = useState(String(Number(drop.resaleCapZar)));
+  const [fee, setFee] = useState(String(drop.resaleFeePct));
+  const [poster, setPoster] = useState(drop.posterUrl ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save(resubmit: boolean) {
+    setBusy(true);
+    setError("");
+    try {
+      await api.editEvent(drop.id, {
+        name: name.trim(),
+        category,
+        venue: venue.trim(),
+        city: city.trim(),
+        startsAt: new Date(date).toISOString(),
+        priceZar: Number(price),
+        maxPerFan: Number(perFan),
+        resaleCapZar: Number(cap),
+        resaleFeePct: Number(fee),
+        posterUrl: poster.trim(),
+        resubmit,
+      });
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save the event");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form
+      className="panel stack"
+      style={{ marginTop: 16 }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save(needsChanges);
+      }}
+    >
+      <h2 style={{ fontSize: "1.8rem" }}>Edit event</h2>
+      <div className="field">
+        <label htmlFor="ed-name">Event name</label>
+        <input id="ed-name" className="input" required value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className="chips" role="radiogroup" aria-label="Category">
+        {EVENT_CATEGORIES.map((c) => (
+          <button key={c} type="button" role="radio" aria-checked={category === c} className="chip" onClick={() => setCategory(c)}>
+            {c}
+          </button>
+        ))}
+      </div>
+      <div className="form-row">
+        <div className="field" style={{ flex: "2 1 220px" }}>
+          <label htmlFor="ed-venue">Venue</label>
+          <input id="ed-venue" className="input" required value={venue} onChange={(e) => setVenue(e.target.value)} />
+        </div>
+        <div className="field" style={{ flex: "1 1 180px" }}>
+          <label htmlFor="ed-city">City or town</label>
+          <input id="ed-city" className="input" list="sa-places-edit" value={city} onChange={(e) => setCity(e.target.value)} />
+          <datalist id="sa-places-edit">
+            {SA_PLACES.map((p) => (
+              <option key={p} value={p} />
+            ))}
+          </datalist>
+        </div>
+        <div className="field" style={{ flex: "1 1 200px" }}>
+          <label htmlFor="ed-date">Date and time</label>
+          <input id="ed-date" className="input" type="datetime-local" required value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+      </div>
+      <div className="form-row">
+        <div className="field" style={{ flex: 1 }}>
+          <label htmlFor="ed-price">Price (R)</label>
+          <input id="ed-price" className="input" inputMode="numeric" required value={price} onChange={(e) => setPrice(e.target.value)} />
+        </div>
+        <div className="field" style={{ flex: 1 }}>
+          <label htmlFor="ed-perfan">Per person</label>
+          <input id="ed-perfan" className="input" inputMode="numeric" required value={perFan} onChange={(e) => setPerFan(e.target.value)} />
+        </div>
+        <div className="field" style={{ flex: 1 }}>
+          <label htmlFor="ed-cap">Resale cap (R)</label>
+          <input id="ed-cap" className="input" inputMode="numeric" required value={cap} onChange={(e) => setCap(e.target.value)} />
+        </div>
+        <div className="field" style={{ flex: 1 }}>
+          <label htmlFor="ed-fee">Resale fee (%)</label>
+          <input id="ed-fee" className="input" inputMode="decimal" required value={fee} onChange={(e) => setFee(e.target.value)} />
+        </div>
+      </div>
+      <div className="field">
+        <label htmlFor="ed-poster">Poster image link (optional)</label>
+        <input id="ed-poster" className="input" type="url" value={poster} onChange={(e) => setPoster(e.target.value)} placeholder="https://…/poster.jpg" />
+      </div>
+      <p className="faint">{drop.supply} tickets. The number of tickets was fixed on the ledger when you created the event, so it can't change.</p>
+      {error && <p className="callout callout-blocked">{error}</p>}
+      <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-start" }}>
+        <Button type="submit" disabled={busy}>
+          {busy ? "Saving" : needsChanges ? "Save and send for review" : "Save changes"}
+        </Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
 
 // What the promoter sees on an event card: review first, then sales.
 export function promoterPill(d: Drop): { label: string; tone: string; bg?: string } {
@@ -348,6 +536,52 @@ const FILTERS: { id: Filter; label: string; test: (d: Drop) => boolean }[] = [
   { id: "closed", label: "Sales closed", test: (d) => d.state === "closed" },
   { id: "cancelled", label: "Cancelled", test: (d) => d.state === "cancelled" },
 ];
+
+// Slush-style filter: one pill with an arrow; the options pop out beside it.
+function FilterMenu({ value, options, onChange }: { value: string; options: { id: string; label: string; count?: number }[]; onChange: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const current = options.find((o) => o.id === value) ?? options[0];
+  return (
+    <div className="filter-menu" style={{ marginTop: 14 }}>
+      <button type="button" className="btn btn-ghost btn-sm filter-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        Show: {current.label}
+        {current.count !== undefined ? ` (${current.count})` : ""}
+        <motion.svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" animate={{ rotate: open ? 90 : 0 }}>
+          <path d="M9 5l7 7-7 7" />
+        </motion.svg>
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            className="filter-options"
+            role="menu"
+            initial={{ opacity: 0, x: -10, scale: 0.96 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: -8, scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 420, damping: 28 }}
+          >
+            {options.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={o.id === value}
+                className="plus-item"
+                onClick={() => {
+                  onChange(o.id);
+                  setOpen(false);
+                }}
+              >
+                {o.label}
+                {o.count !== undefined && <span className="num">{o.count}</span>}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 function EventCards({ list }: { list: Drop[] }) {
   return (
@@ -415,7 +649,6 @@ export function PromoterHome() {
   const next = live
     .filter((d) => new Date(d.startsAt).getTime() > Date.now())
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt))[0];
-  const ready = money ? money.events.filter((e) => Number(e.availableZar) > 0) : [];
 
   return (
     <div className="desk">
@@ -445,17 +678,25 @@ export function PromoterHome() {
         <button type="button" className="kpi kpi-link" style={{ background: "var(--mint)" }} onClick={() => navigate("/promoter/payouts")}>
           <p style={{ fontWeight: 800 }}>Earned</p>
           <p className="stat-value num">{money ? rand(money.earnedZar) : "…"}</p>
-          <p className="faint">{money ? `${rand(money.feesZar)} from resale fees` : ""}</p>
+          <p className="faint">{money ? `Ticket sales and ${rand(money.feesZar)} in resale fees` : ""}</p>
         </button>
         <button type="button" className="kpi kpi-link" style={{ background: "var(--lilac)" }} onClick={() => navigate("/promoter/payouts")}>
-          <p style={{ fontWeight: 800 }}>Ready to pay out</p>
-          <p className="stat-value num">{money ? rand(money.availableZar) : "…"}</p>
-          <p className="faint">{money && Number(money.heldZar) > 0 ? `${rand(money.heldZar)} held until events happen` : "Request per event"}</p>
+          <p style={{ fontWeight: 800 }}>Next payout</p>
+          <p className="stat-value num">{money ? rand(Number(money.heldZar) + Number(money.availableZar) + Number(money.requestedZar)) : "…"}</p>
+          <p className="faint">
+            {!money
+              ? ""
+              : money.kind === "business"
+                ? "Paid automatically as you sell"
+                : money.nextPayoutAt
+                  ? `Automatically on ${new Date(money.nextPayoutAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}`
+                  : "Automatically, the morning after"}
+          </p>
         </button>
-        <button type="button" className="kpi kpi-link" style={{ background: "#8ec5ff" }} onClick={() => navigate("/promoter/events?filter=review")}>
-          <p style={{ fontWeight: 800 }}>In review</p>
-          <p className="stat-value num">{inReview.length}</p>
-          <p className="faint">Events waiting for Siyangena</p>
+        <button type="button" className="kpi kpi-link" style={{ background: "#8ec5ff" }} onClick={() => navigate("/promoter/events?filter=open")}>
+          <p style={{ fontWeight: 800 }}>On sale now</p>
+          <p className="stat-value num">{live.filter((d) => d.state === "open").length}</p>
+          <p className="faint">{inReview.length ? `${inReview.length} in review` : "Nothing waiting for review"}</p>
         </button>
       </div>
 
@@ -464,7 +705,7 @@ export function PromoterHome() {
       ) : list.length === 0 ? (
         <div className="callout stack" style={{ gap: 8, maxWidth: 620 }}>
           <strong>No events yet</strong>
-          <p className="muted">Create your first event. You set the price, how many tickets each fan can hold and the resale cap. We check it, then you open sales.</p>
+          <p className="muted">Create your first event. You set the price, how many tickets each person can buy and the resale cap. We check it, then you open sales.</p>
           <Button onClick={() => navigate("/promoter/create")}>Create an event</Button>
         </div>
       ) : (
@@ -482,17 +723,6 @@ export function PromoterHome() {
                 </Button>
               </div>
             ))}
-            {ready.map((e) => (
-              <div key={e.eventId} className="panel row" style={{ flexWrap: "wrap" }}>
-                <div>
-                  <strong>{rand(e.availableZar)} ready from {e.name}</strong>
-                  <p className="faint">Request it and we pay it to your bank.</p>
-                </div>
-                <Button className="btn-sm" onClick={() => navigate("/promoter/payouts")}>
-                  Payouts
-                </Button>
-              </div>
-            ))}
             {live
               .filter((d) => d.state === "scheduled" && (!d.review || d.review.status === "approved"))
               .map((d) => (
@@ -506,27 +736,43 @@ export function PromoterHome() {
                   </Button>
                 </div>
               ))}
-            {inReview.filter((d) => d.review?.status === "needs_more").length === 0 && ready.length === 0 && !live.some((d) => d.state === "scheduled" && (!d.review || d.review.status === "approved")) && (
+            {inReview.filter((d) => d.review?.status === "needs_more").length === 0 && !live.some((d) => d.state === "scheduled" && (!d.review || d.review.status === "approved")) && (
               <p className="muted">Nothing needs you right now.</p>
             )}
             {next && (
               <>
                 <h2 style={{ marginTop: 10 }}>Next up</h2>
-                <EventCards list={[next]} />
-                <div className="row" style={{ gap: 8, justifyContent: "flex-start" }}>
-                  <Button variant="ghost" className="btn-sm" onClick={() => navigate(`/promoter/events/${next.id}`)}>
-                    Control room
-                  </Button>
-                  <Button variant="ghost" className="btn-sm" onClick={() => navigate(`/promoter/events/${next.id}/door`)}>
-                    Door scanner
-                  </Button>
-                </div>
+                <Link to={`/promoter/events/${next.id}`} className="panel next-up">
+                  <div className="next-up-art">
+                    <EventArt drop={next} />
+                  </div>
+                  <div className="stack" style={{ gap: 6, flex: 1, minWidth: 0 }}>
+                    {(() => {
+                      const pill = promoterPill(next);
+                      return (
+                        <span className={`pill ${pill.tone}`} style={{ justifySelf: "start", alignSelf: "flex-start", ...(pill.bg ? { background: pill.bg } : {}) }}>
+                          {pill.label}
+                        </span>
+                      );
+                    })()}
+                    <h3 style={{ fontSize: "1.6rem" }}>{next.name}</h3>
+                    <p className="faint">
+                      {dateLong(next.startsAt)}, {next.venue}
+                    </p>
+                    <div className="meter" aria-hidden="true">
+                      <div style={{ width: `${next.supply ? (next.sold / next.supply) * 100 : 0}%` }} />
+                    </div>
+                    <p style={{ fontWeight: 700 }}>
+                      {next.sold} of {next.supply} sold
+                    </p>
+                  </div>
+                </Link>
               </>
             )}
           </div>
           <aside className="desk-aside stack">
             <div className="panel stack" style={{ background: "var(--lilac)", gap: 6 }}>
-              <h3>What fans are asking for</h3>
+              <h3>What people are asking for</h3>
               {demand && demand.top.length > 0 ? (
                 demand.top.map((t) => (
                   <div key={`${t.query}-${t.city ?? ""}`} className="row">
@@ -538,7 +784,7 @@ export function PromoterHome() {
                   </div>
                 ))
               ) : (
-                <p>No wishes yet. As fans add who they want to see, the top asks show here.</p>
+                <p>No wishes yet. As people add who they want to see, the top asks show here.</p>
               )}
             </div>
           </aside>
@@ -568,16 +814,11 @@ export function PromoterEvents() {
           <Button onClick={() => navigate("/promoter/create")}>New event</Button>
         </div>
       </Enter>
-      <div className="chips" role="radiogroup" aria-label="Show" style={{ marginTop: 14 }}>
-        {FILTERS.map((x) => {
-          const count = (mine ?? []).filter(x.test).length;
-          return (
-            <button key={x.id} type="button" role="radio" aria-checked={filter === x.id} className="chip" onClick={() => setParams(x.id === "all" ? {} : { filter: x.id })}>
-              {x.label} {mine ? `(${count})` : ""}
-            </button>
-          );
-        })}
-      </div>
+      <FilterMenu
+        value={filter}
+        options={FILTERS.map((x) => ({ id: x.id, label: x.label, count: mine ? (mine ?? []).filter(x.test).length : undefined }))}
+        onChange={(id) => setParams(id === "all" ? {} : { filter: id })}
+      />
       {mine === null ? (
         <p className="muted" style={{ marginTop: 20 }}>
           Loading your events
@@ -639,7 +880,7 @@ function ReviewStatus() {
           <div className="panel" style={{ background: "var(--sun-wash)" }}>
             <p style={{ margin: 0 }}>
               {app.kind === "independent"
-                ? "Independent promoters: ticket money is held until each event happens, then paid out the next morning. Fans are refunded automatically if an event is cancelled."
+                ? "Independent promoters: ticket money is held until each event happens, then paid out the next morning. Ticket holders are refunded automatically if an event is cancelled."
                 : "Registered businesses are paid as tickets sell."}
             </p>
           </div>
@@ -665,7 +906,7 @@ export function PromoterOnboard() {
       <Enter>
         <Marquee rows={[["Sell out fairly", "Earn on resale", "No touts"]]} size={40} speed={32} />
         <h1 style={{ margin: "10px 0 8px" }}>Sell with Siyangena</h1>
-        <p className="muted" style={{ maxWidth: 620 }}>Every fan can see who is behind an event. That's why we check every promoter first, big or small.</p>
+        <p className="muted" style={{ maxWidth: 620 }}>Anyone buying can see who is behind an event. That's why we check every promoter first, big or small.</p>
       </Enter>
       <div className="desk-form" style={{ marginTop: 8 }}>
       <div>
@@ -742,7 +983,7 @@ export function PromoterOnboard() {
                 </div>
                 <div className="callout callout-sun stack" style={{ gap: 6 }}>
                   <strong>How payouts work for you</strong>
-                  <p>Ticket money is held until your event happens, then paid out the next morning. If the event is cancelled, every fan is refunded automatically. After a few events with us, you get paid as tickets sell.</p>
+                  <p>Ticket money is held until your event happens, then paid out the next morning. If the event is cancelled, every ticket holder is refunded automatically. After a few events with us, you get paid as tickets sell.</p>
                 </div>
               </>
             )}
@@ -766,13 +1007,13 @@ export function PromoterOnboard() {
       <aside className="desk-aside stack">
         <div className="panel stack" style={{ gap: 10, background: "var(--sun)" }}>
           <h2 style={{ fontSize: "1.8rem" }}>What you get</h2>
-          <p>Tickets that can't be faked or copied, so fans trust your events.</p>
+          <p>Tickets that can't be faked or copied, so people trust your events.</p>
           <p>A fee on every resale, at a cap you set. Touts can't undercut you.</p>
           <p>Live view of every sale and every bad attempt that was stopped.</p>
         </div>
         <div className="panel stack" style={{ gap: 6 }}>
           <h3>Starting out?</h3>
-          <p className="muted">Independent promoters get the same tools. Ticket money waits safely until the event happens, and fans are refunded automatically if it's cancelled.</p>
+          <p className="muted">Independent promoters get the same tools. Ticket money waits safely until the event happens, and ticket holders are refunded automatically if it's cancelled.</p>
         </div>
       </aside>
       </div>
@@ -794,6 +1035,7 @@ export function CreateEvent() {
   const { refreshDrops } = useApp();
   const [posterUrl, setPosterUrl] = useState("");
   const [name, setName] = useState("");
+  const [category, setCategory] = useState<EventCategory>("Music");
   const [scene, setScene] = useState<Scene>("longstreet");
   const [poster, setPoster] = useState(false);
   const [venue, setVenue] = useState("");
@@ -830,6 +1072,7 @@ export function CreateEvent() {
     try {
       const created = await api.createEvent({
         name,
+        category,
         venue,
         scene: poster ? undefined : scene,
         city: city.trim() || undefined,
@@ -862,6 +1105,17 @@ export function CreateEvent() {
           <div className="field">
             <label htmlFor="ename">Event name</label>
             <input id="ename" className="input" required value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label>What kind of event</label>
+            <div className="chips" role="radiogroup" aria-label="Category">
+              {EVENT_CATEGORIES.map((c) => (
+                <button key={c} type="button" role="radio" aria-checked={category === c} className="chip" onClick={() => setCategory(c)}>
+                  {c}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="panel stack">
@@ -932,14 +1186,14 @@ export function CreateEvent() {
               <input id="supply" className="input" inputMode="numeric" required value={supply} onChange={(e) => setSupply(e.target.value)} />
             </div>
             <div className="field" style={{ flex: 1 }}>
-              <label htmlFor="eperfan">Per fan</label>
+              <label htmlFor="eperfan">Per person</label>
               <input id="eperfan" className="input" inputMode="numeric" required value={perFan} onChange={(e) => setPerFan(e.target.value)} />
             </div>
           </div>
 
           <div className="panel stack">
             <h3>Resale</h3>
-            <p className="muted">You decide the most a fan can resell a ticket for. Fans who can't go still get their money back, and touts can't profit.</p>
+            <p className="muted">You decide the most anyone can resell a ticket for. People who can't go still get their money back, and touts can't profit.</p>
             <div className="chips" role="radiogroup" aria-label="Resale cap">
               {CAP_PRESETS.map((c) => (
                 <motion.button key={c.id} type="button" role="radio" aria-checked={preset === c.id} className="chip" whileTap={{ scale: 0.92 }} onClick={() => setPreset(c.id)}>
@@ -969,19 +1223,19 @@ export function CreateEvent() {
           <Button type="submit" block disabled={busy || !p || cap <= 0}>
             {busy ? "Creating" : "Create and send for review"}
           </Button>
-          <p className="faint">We check every event before fans can see it, usually within a few hours. Then you open sales.</p>
+          <p className="faint">We check every event before anyone can see it, usually within a few hours. Then you open sales.</p>
         </form>
       </Enter>
       <aside className="desk-aside stack">
         <div className="panel stack" style={{ background: "var(--lilac)", gap: 8 }}>
-          <p style={{ fontWeight: 800 }}>Fans waiting for this</p>
+          <p style={{ fontWeight: 800 }}>People waiting for this</p>
           <p className="stat-value num" style={{ fontSize: "3.2rem" }}>
             {demand?.matching ?? 0}
           </p>
           <p>
             {demand?.matching
-              ? `${demand.matching === 1 ? "fan has" : "fans have"} a wish that fits this event. They get an alert the moment you create it.`
-              : "Fans with a matching wish get an alert the moment you create it."}
+              ? `${demand.matching === 1 ? "person has" : "people have"} a wish that fits this event. They get an alert the moment you create it.`
+              : "People with a matching wish get an alert the moment you create it."}
           </p>
           {demand && demand.top.length > 0 && (
             <div className="stack" style={{ gap: 4, marginTop: 4 }}>
@@ -998,7 +1252,7 @@ export function CreateEvent() {
             </div>
           )}
         </div>
-        <p style={{ fontWeight: 800 }}>How fans will see it</p>
+        <p style={{ fontWeight: 800 }}>How people will see it</p>
         <div className="event-card">
           <div className="event-art">
             {poster ? (
@@ -1023,7 +1277,7 @@ export function CreateEvent() {
         </div>
         <div className="panel breakdown">
           <div className="row">
-            <span>Tickets per fan</span>
+            <span>Tickets per person</span>
             <span className="num">{perFan || "0"}</span>
           </div>
           <div className="row">

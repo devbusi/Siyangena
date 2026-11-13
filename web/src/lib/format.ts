@@ -20,7 +20,7 @@ export type Tone = "ok" | "blocked" | "decided" | "info";
 const COPY: Record<DropEventType, { title: string; tone: Tone }> = {
   "drop.opened": { title: "Tickets are on sale", tone: "info" },
   "drop.sold_out": { title: "Sold out", tone: "info" },
-  "drop.cancelled": { title: "Event cancelled, refunding fans", tone: "blocked" },
+  "drop.cancelled": { title: "Event cancelled, refunding ticket holders", tone: "blocked" },
   "sale.intent": { title: "Agent reserved tickets", tone: "decided" },
   "sale.paid": { title: "Payment confirmed", tone: "ok" },
   "sale.ticket_sent": { title: "Tickets landed in the wallet", tone: "ok" },
@@ -60,7 +60,7 @@ export function describe(event: DropEvent): { title: string; detail: string; ton
 function friendlyDetail(event: DropEvent): string {
   switch (event.type) {
     case "drop.opened":
-      return "Verified fans only. Agents are buying now.";
+      return "Verified ticket holders only. Agents are buying now.";
     case "sale.paid":
       return "Confirmed in seconds.";
     case "sale.ticket_sent":

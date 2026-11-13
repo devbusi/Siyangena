@@ -72,6 +72,7 @@ export interface Drop {
   posterUrl?: string;
   promoterId?: string;
   promoterName?: string;
+  category?: EventCategory;
   // Set when the promoter cancels: what fans are told, and how the refunds are going.
   cancel?: CancelProgress;
   // Every new event is checked by an admin before it can go on sale.
@@ -84,6 +85,9 @@ export interface EventReview {
   submittedAt: string;
   reviewedAt?: string;
 }
+
+export const EVENT_CATEGORIES = ["Music", "Nightlife", "Sport", "Food and drink", "Comedy", "Arts and culture", "Festivals", "Family"] as const;
+export type EventCategory = (typeof EVENT_CATEGORIES)[number];
 
 export interface CancelProgress {
   reason: string;
@@ -98,6 +102,7 @@ export interface CancelProgress {
 export interface CreateDropRequest {
   name: string;
   venue: string;
+  category?: EventCategory;
   city?: string;
   scene?: string;
   posterUrl?: string;
@@ -522,6 +527,7 @@ export interface PayoutSummary {
   refundedZar: string;
   kind: "business" | "independent";
   bank?: string;
+  nextPayoutAt?: string; // when held money is next paid out (independent promoters)
   events: PayoutEventLine[];
   history: Payout[];
 }

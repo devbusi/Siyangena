@@ -11,7 +11,7 @@ import { useEvent } from "./EventPage";
 
 const STEPS = [
   { key: "open", label: "Listed for resale" },
-  { key: "signing", label: "A verified fan wants it" },
+  { key: "signing", label: "A verified ticket holder wants it" },
   { key: "settled", label: "Swapped and paid" },
 ];
 
@@ -71,8 +71,8 @@ export function Resell() {
           <h1 style={{ margin: "10px 0 8px" }}>{done ? "Sold!" : "Can't go?"}</h1>
           <p className="muted">
             {done
-              ? `${rand(n)} is in your wallet. The ticket went to a verified fan.`
-              : "Your agent sells it to a verified fan on the waiting list. You get paid the moment the ticket moves."}
+              ? `${rand(n)} is in your wallet. The ticket went to a verified ticket holder.`
+              : "Your agent sells it to a verified ticket holder on the waiting list. You get paid the moment the ticket moves."}
           </p>
         </Enter>
 

@@ -38,6 +38,7 @@ export class Drop {
       ...(record.promoterName ? { promoterName: record.promoterName } : {}),
       ...(record.cancel ? { cancel: record.cancel } : {}),
       ...(record.review ? { review: record.review } : {}),
+      ...(record.category ? { category: record.category as DropView["category"] } : {}),
     };
   }
 
@@ -105,6 +106,7 @@ export class Drop {
   async createDrop(
     params: {
       name: string;
+      category?: string;
       venue: string;
       city?: string;
       scene?: string;
@@ -159,6 +161,30 @@ export class Drop {
     touchDrop(drop.id);
     // Fans who wished for something like this hear about it once it's approved.
     if (decision === "approved") alerts.onNewEvent(drop);
+    return this.toView(drop);
+  }
+
+  // While an event is in review the promoter can change any of its details. The ticket
+  // supply was set on the ledger when the event was created, so it stays.
+  editDetails(
+    eventId: string,
+    p: { name?: string; category?: string; venue?: string; city?: string; scene?: string; posterUrl?: string; startsAt?: string; priceZar?: number; maxPerFan?: number; resaleCapZar?: number; resaleFeePct?: number; resubmit?: boolean },
+  ): DropView {
+    const drop = this.getRecord(eventId);
+    if (isApproved(drop)) throw conflict("INVALID_STATE", "This event is approved. Only the per-person limit, resale cap and fee can change now.");
+    if (p.name !== undefined) drop.name = p.name;
+    if (p.category !== undefined) drop.category = p.category;
+    if (p.venue !== undefined) drop.venue = p.venue;
+    if (p.city !== undefined) drop.city = p.city || undefined;
+    if (p.scene !== undefined) drop.scene = p.scene || undefined;
+    if (p.posterUrl !== undefined) drop.posterUrl = p.posterUrl || undefined;
+    if (p.startsAt !== undefined) drop.startsAt = new Date(p.startsAt).toISOString();
+    if (p.priceZar !== undefined) drop.priceZar = p.priceZar;
+    if (p.maxPerFan !== undefined) drop.maxPerFan = p.maxPerFan;
+    if (p.resaleCapZar !== undefined) drop.resaleCapZar = p.resaleCapZar;
+    if (p.resaleFeePct !== undefined) drop.resaleFeePct = p.resaleFeePct;
+    if (p.resubmit && drop.review?.status === "needs_more") drop.review = { status: "pending", submittedAt: nowIso() };
+    touchDrop(drop.id);
     return this.toView(drop);
   }
 

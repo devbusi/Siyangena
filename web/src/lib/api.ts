@@ -77,6 +77,7 @@ export interface Api {
   cashOut(body: { amountZar: number; bank: string; accountNumber: string }): Promise<BankTransfer>;
   // Promoter
   resubmitEvent(eventId: string): Promise<Drop>;
+  editEvent(eventId: string, body: EditEventInput): Promise<Drop>;
   myEvents(): Promise<Drop[]>;
   createEvent(body: CreateDropRequest): Promise<Drop>;
   openSales(eventId: string): Promise<Drop>;
@@ -101,6 +102,20 @@ export interface Api {
   changeRequests(): Promise<ChangeRequest[]>;
   reviewChange(userId: string, decision: "approved" | "rejected", note?: string): Promise<ChangeRequest>;
   markPayoutPaid(id: string): Promise<Payout>;
+}
+
+export interface EditEventInput {
+  name?: string;
+  category?: string;
+  venue?: string;
+  city?: string;
+  startsAt?: string;
+  priceZar?: number;
+  maxPerFan?: number;
+  resaleCapZar?: number;
+  resaleFeePct?: number;
+  posterUrl?: string;
+  resubmit?: boolean;
 }
 
 export interface PromoterDetailsInput {
@@ -186,6 +201,7 @@ const realApi: Api = {
   deposit: (body) => call("POST", "/me/deposits", body),
   cashOut: (body) => call("POST", "/me/cashouts", body),
   resubmitEvent: (id) => call("POST", `/promoter/events/${id}/resubmit`, {}),
+  editEvent: (id, body) => call("PATCH", `/promoter/events/${id}/details`, body),
   myEvents: () => call("GET", "/promoter/events"),
   createEvent: (body) => call("POST", "/promoter/events", body),
   openSales: (id) => call("POST", `/promoter/events/${id}/open`, {}),

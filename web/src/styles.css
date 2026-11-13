@@ -1646,3 +1646,81 @@ input[type="range"] {
 .table tr:last-child td {
   border-bottom: 0;
 }
+
+/* ---------- Promoter: next up row and filter menu ---------- */
+.next-up {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  text-decoration: none;
+  color: var(--ink);
+  transition: background-color 0.18s ease;
+}
+.next-up:hover {
+  background: var(--sun-wash);
+}
+.next-up-art {
+  width: 180px;
+  height: 120px;
+  flex: none;
+  border: var(--stroke);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+@media (max-width: 560px) {
+  .next-up {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .next-up-art {
+    width: 100%;
+  }
+}
+.filter-menu {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.filter-btn {
+  gap: 8px;
+  min-height: 44px;
+}
+.filter-options {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 0;
+  z-index: 20;
+  min-width: 240px;
+  background: #fff;
+  border: var(--stroke);
+  border-radius: var(--r-md);
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+}
+.filter-options .plus-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.filter-options .plus-item[aria-checked="true"] {
+  background: #000;
+  color: #fff;
+}
+@media (max-width: 700px) {
+  .filter-options {
+    left: 0;
+    top: calc(100% + 8px);
+  }
+}
+.filter-menu {
+  width: fit-content;
+}
+/* Locked fields: readable, clearly not editable until the pencil is pressed. */
+fieldset:disabled .input,
+.input:disabled {
+  border-style: dashed;
+  cursor: not-allowed;
+  background: transparent;
+}

@@ -48,6 +48,8 @@ export class Sales {
 
     if (drop.state === "sold_out") throw conflict("SOLD_OUT", "This event is sold out");
     if (drop.state !== "open") throw conflict("NOT_OPEN", `Sales are ${drop.state === "scheduled" ? "not open yet" : drop.state}`);
+    // A promoter can buy other promoters' tickets, never their own: that would be scalping their own show.
+    if (drop.promoterId && drop.promoterId === fanId) throw forbidden("UNAUTHORIZED", "You can't buy tickets to your own event");
 
     fanService.assertVerified(fanId);
     const mandateId = opts.manual ? "manual" : mandateService.assertWithinMandate(fanId, quantity, drop.priceZar, drop.id).id;
@@ -56,7 +58,7 @@ export class Sales {
     const fanPending = pending.filter((i) => i.fanId === fanId).reduce((n, i) => n + i.quantity, 0);
     const held = await fanService.getTicketCount(fanId, drop.id);
     if (held + fanPending + quantity > drop.maxPerFan) {
-      const message = `${fanId}: max ${drop.maxPerFan} per fan (holds ${held}, pending ${fanPending}, asked ${quantity})`;
+      const message = `${fanId}: max ${drop.maxPerFan} per person (holds ${held}, pending ${fanPending}, asked ${quantity})`;
       events.emit("mandate.blocked", message, { fanId, eventId: drop.id });
       throw forbidden("LIMIT_PER_FAN", message);
     }
