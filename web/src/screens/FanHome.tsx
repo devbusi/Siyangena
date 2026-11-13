@@ -202,11 +202,19 @@ export function WalletScreen() {
   const [history, setHistory] = useState<FanTickets["history"]>([]);
   const [busy, setBusy] = useState(0);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    api.wallet().then(setWallet).catch(() => setWallet(null));
+    api
+      .wallet()
+      .then((w) => {
+        setWallet(w);
+        setLoadError("");
+      })
+      .catch((e) => setLoadError(e instanceof Error ? e.message : "Couldn't load your wallet"));
     api.tickets().then((t) => setHistory(t.history)).catch(() => undefined);
-  }, [tick]);
+  }, [tick, attempt]);
 
   async function topUp(amount: number) {
     setError("");
@@ -231,6 +239,14 @@ export function WalletScreen() {
             <p className="stat-value num" style={{ fontSize: "4rem" }}>
               {wallet ? rand(wallet.allowanceZar) : "R…"}
             </p>
+            {loadError && !wallet && (
+              <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                <p style={{ fontWeight: 700 }}>{loadError}</p>
+                <Button variant="ghost" onClick={() => setAttempt((n) => n + 1)}>
+                  Try again
+                </Button>
+              </div>
+            )}
             <p className="faint">Your money for tickets and your agent. Anything you don't spend stays yours.</p>
           </div>
         </Enter>

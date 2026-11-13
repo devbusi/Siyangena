@@ -189,10 +189,16 @@ export class Fans {
 
   async getWallet(fanId: string, eventId?: string): Promise<FanWallet> {
     const ctx = this.getContext(fanId);
+    // One slow or failed lookup should not take the whole wallet down: log it and show zero.
+    const safe = <T,>(label: string, p: Promise<T>, fallback: T) =>
+      p.catch((error) => {
+        console.error(`Wallet ${label} lookup failed for ${ctx.agent.address}:`, error?.data?.error ?? error?.message ?? error);
+        return fallback;
+      });
     const [allowance, xrp, tickets] = await Promise.all([
-      xrplPayments.getSettleBalance(ctx.agent.address),
-      xrplClient.getXrpBalance(ctx.agent.address),
-      this.getTicketCount(fanId, eventId),
+      safe("balance", xrplPayments.getSettleBalance(ctx.agent.address), "0"),
+      safe("XRP", xrplClient.getXrpBalance(ctx.agent.address), 0),
+      safe("ticket", this.getTicketCount(fanId, eventId), 0),
     ]);
     return {
       allowanceRlusd: allowance,
