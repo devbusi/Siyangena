@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { ACTIVE, type PromoterStats } from "@drop/shared";
-import { Button, Enter, FeedRow, TopBar } from "../components/ui";
+import { Button, Enter, FeedRow, Marquee, TopBar } from "../components/ui";
 import { CityArt, SCENES, type Scene } from "../components/CityArt";
 import { api } from "../lib/api";
 import { MOCK } from "../lib/config";
@@ -67,6 +67,7 @@ export function PromoterDesk() {
   return (
     <div className="desk">
       <TopBar />
+      <Marquee rows={[[drop ? drop.name : "Your first event", "Verified fans only", "Resale at your price", "Live"]]} size={34} speed={36} />
       {!drop ? (
         <Enter>
           <div className="stack" style={{ maxWidth: 520, margin: "40px auto", textAlign: "center" }}>
@@ -242,12 +243,15 @@ export function PromoterOnboard() {
   const [sent, setSent] = useState(false);
 
   return (
-    <div className="phone" style={{ maxWidth: 560 }}>
+    <div className="desk">
       <TopBar back="/promoter" />
       <Enter>
+        <Marquee rows={[["Sell out fairly", "Earn on resale", "No touts"]]} size={40} speed={32} />
         <h1 style={{ margin: "10px 0 8px" }}>Sell with Siyangena</h1>
-        <p className="muted">Every fan can see who is behind an event. That's why we check every promoter first, big or small.</p>
+        <p className="muted" style={{ maxWidth: 620 }}>Every fan can see who is behind an event. That's why we check every promoter first, big or small.</p>
       </Enter>
+      <div className="desk-form" style={{ marginTop: 8 }}>
+      <div>
 
       {sent ? (
         <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="stack" style={{ marginTop: 22 }}>
@@ -317,6 +321,20 @@ export function PromoterOnboard() {
           </form>
         </Enter>
       )}
+      </div>
+      <aside className="desk-aside stack">
+        <div className="panel stack" style={{ gap: 10, background: "var(--sun)" }}>
+          <h2 style={{ fontSize: "1.8rem" }}>What you get</h2>
+          <p>Tickets that can't be faked or copied, so fans trust your events.</p>
+          <p>A fee on every resale, at a cap you set. Touts can't undercut you.</p>
+          <p>Live view of every sale and every bad attempt that was stopped.</p>
+        </div>
+        <div className="panel stack" style={{ gap: 6 }}>
+          <h3>Starting out?</h3>
+          <p className="muted">Independent promoters get the same tools. Ticket money waits safely until the event happens, and fans are refunded automatically if it's cancelled.</p>
+        </div>
+      </aside>
+      </div>
     </div>
   );
 }
@@ -376,11 +394,12 @@ export function CreateEvent() {
   }
 
   return (
-    <div className="phone" style={{ maxWidth: 620 }}>
+    <div className="desk">
       <TopBar back="/promoter" />
       <Enter>
         <h1 style={{ margin: "10px 0 18px" }}>New event</h1>
       </Enter>
+      <div className="desk-form">
       <Enter delay={0.06}>
         <form className="stack" onSubmit={submit}>
           <div className="field">
@@ -486,6 +505,42 @@ export function CreateEvent() {
           </Button>
         </form>
       </Enter>
+      <aside className="desk-aside stack">
+        <p style={{ fontWeight: 800 }}>How fans will see it</p>
+        <div className="event-card">
+          <div className="event-art">
+            {poster ? (
+              <div style={{ height: "100%", display: "grid", placeItems: "center", background: "var(--sun-wash)", fontWeight: 800 }}>Your poster</div>
+            ) : (
+              <CityArt scene={scene} />
+            )}
+          </div>
+          <div className="event-body">
+            <div>
+              <h3>{name || "Your event"}</h3>
+              <p className="faint">
+                {venue || "Venue"}, {date ? new Date(date).toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" }) : "Date"}, from {rand(p)}
+              </p>
+            </div>
+            <span className="pill pill-live">On sale soon</span>
+          </div>
+        </div>
+        <div className="panel breakdown">
+          <div className="row">
+            <span>Tickets per fan</span>
+            <span className="num">{perFan || "0"}</span>
+          </div>
+          <div className="row">
+            <span>Resale cap</span>
+            <span className="num">{rand(cap)}</span>
+          </div>
+          <div className="row total">
+            <span>You earn per resale</span>
+            <span className="num">{rand((cap * (Number(fee) || 0)) / 100, true)}</span>
+          </div>
+        </div>
+      </aside>
+      </div>
     </div>
   );
 }
