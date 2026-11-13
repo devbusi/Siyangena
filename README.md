@@ -97,7 +97,7 @@ npm run demo
 
 ## SMS
 
-Fans get a text when their tickets arrive (with a link to show at the door), when their resale ticket sells, and when they get a resale ticket. Add `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` and `APP_URL` to send them for real. Without them, the backend prints each message to its log.
+Fans get a text when their tickets arrive (with a link to show at the door), when their resale ticket sells, and when they get a resale ticket. For the MVP these are placeholders: the backend prints each message to its log. An SMS provider plugs into `backend/src/lib/sms.ts`.
 
 ## Deploy
 
