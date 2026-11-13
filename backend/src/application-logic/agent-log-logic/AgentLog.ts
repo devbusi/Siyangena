@@ -20,6 +20,8 @@ export class AgentLog {
     events.emit("agent.action", `${params.fanId}'s agent: ${params.tool}: ${params.reason}`, {
       fanId: params.fanId,
       txHash: params.txHash,
+      detail: params.reason,
+      tool: params.tool,
     });
     return entry;
   }

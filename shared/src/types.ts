@@ -281,6 +281,9 @@ export interface DropEvent {
   listingId?: string;
   batchId?: string;
   message: string;
+  // Plain-English detail for the app (e.g. the agent's own reason). Optional.
+  detail?: string;
+  tool?: string;
   txHash?: string;
   explorerUrl?: string;
 }
