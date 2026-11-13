@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import type { Drop, FanTickets, FanWallet } from "@drop/shared";
 import { Button, Enter, Marquee, Ticket, TopBar } from "../components/ui";
@@ -8,17 +8,6 @@ import { api } from "../lib/api";
 import { dateLong, rand, time } from "../lib/format";
 import { useApp } from "../lib/store";
 import { MARQUEE_PLACES } from "../lib/places";
-
-export function TabBar() {
-  return (
-    <nav className="tabbar" aria-label="Main">
-      <NavLink to="/events">Events</NavLink>
-      <NavLink to="/tickets">Tickets</NavLink>
-      <NavLink to="/wallet">Wallet</NavLink>
-      <NavLink to="/wishlist">Wishlist</NavLink>
-    </nav>
-  );
-}
 
 export function EventArt({ drop }: { drop: Drop }) {
   if (drop.posterUrl) return <img className="poster" src={drop.posterUrl} alt="" />;
@@ -115,7 +104,6 @@ export function Discover() {
           </motion.div>
         )}
       </div>
-      <TabBar />
     </>
   );
 }
@@ -177,7 +165,6 @@ export function Tickets() {
           </div>
         )}
       </div>
-      <TabBar />
       <AnimatePresence>
         {gifting && (
           <motion.div className="scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setGifting(false)}>
@@ -286,7 +273,6 @@ export function WalletScreen() {
           </div>
         </Enter>
       </div>
-      <TabBar />
     </>
   );
 }
@@ -341,7 +327,6 @@ export function Wishlist() {
           </p>
         </div>
       </div>
-      <TabBar />
     </>
   );
 }

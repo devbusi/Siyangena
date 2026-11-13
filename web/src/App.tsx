@@ -1,5 +1,5 @@
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
-import { DemoBar, RequireAuth } from "./components/ui";
+import { DemoBar, RequireAuth, RoleTabBar } from "./components/ui";
 import { AppProvider } from "./lib/store";
 import { AuthProvider } from "./lib/auth";
 import { Landing, Setup, SignIn, SignUp, Verify } from "./screens/Auth";
@@ -9,7 +9,8 @@ import { LiveSale } from "./screens/LiveSale";
 import { Mandate } from "./screens/Mandate";
 import { CreateEvent, PromoterDesk, PromoterHome, PromoterOnboard } from "./screens/Promoter";
 import { Resell } from "./screens/Resell";
-import { AdminHome } from "./screens/Admin";
+import { AdminEvents, AdminOverview, AdminPeople, AdminReview } from "./screens/Admin";
+import { Account } from "./screens/Account";
 
 export function App() {
   return (
@@ -36,6 +37,7 @@ export function App() {
               <Route path="/tickets/:eventId/resell" element={<RequireAuth><Resell /></RequireAuth>} />
               <Route path="/wallet" element={<RequireAuth><WalletScreen /></RequireAuth>} />
               <Route path="/wishlist" element={<Wishlist />} />
+              <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
 
               {/* Promoters */}
               <Route path="/promoter" element={<RequireAuth role="promoter"><PromoterHome /></RequireAuth>} />
@@ -44,10 +46,14 @@ export function App() {
               <Route path="/promoter/events/:id" element={<RequireAuth role="promoter"><PromoterDesk /></RequireAuth>} />
 
               {/* Admins */}
-              <Route path="/admin" element={<RequireAuth role="admin"><AdminHome /></RequireAuth>} />
+              <Route path="/admin" element={<RequireAuth role="admin"><AdminOverview /></RequireAuth>} />
+              <Route path="/admin/review" element={<RequireAuth role="admin"><AdminReview /></RequireAuth>} />
+              <Route path="/admin/people" element={<RequireAuth role="admin"><AdminPeople /></RequireAuth>} />
+              <Route path="/admin/events" element={<RequireAuth role="admin"><AdminEvents /></RequireAuth>} />
 
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            <RoleTabBar />
           </div>
         </HashRouter>
       </AppProvider>

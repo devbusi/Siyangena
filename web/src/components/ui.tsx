@@ -1,6 +1,6 @@
-import { motion, useReducedMotion, type HTMLMotionProps } from "motion/react";
-import type { ReactNode } from "react";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { AnimatePresence, motion, useReducedMotion, type HTMLMotionProps } from "motion/react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Link, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { MOCK } from "../lib/config";
 import { mockAuth } from "../lib/mock";
@@ -173,6 +173,162 @@ export function Logo({ size = 1 }: { size?: number }) {
   );
 }
 
+// One menu per role. The same items show in the header on desktop and as bottom tabs on phones.
+export interface NavItem {
+  to: string;
+  label: string;
+  end?: boolean;
+}
+
+export function navFor(role: string | undefined, signedIn: boolean): NavItem[] {
+  if (role === "admin")
+    return [
+      { to: "/admin", label: "Overview", end: true },
+      { to: "/admin/review", label: "Review" },
+      { to: "/admin/events", label: "Events" },
+      { to: "/account", label: "Account" },
+    ];
+  if (role === "promoter")
+    return [
+      { to: "/promoter", label: "Overview", end: true },
+      { to: "/promoter/create", label: "New event" },
+      { to: "/events", label: "Browse", end: true },
+      { to: "/account", label: "Account" },
+    ];
+  if (signedIn)
+    return [
+      { to: "/events", label: "Events", end: true },
+      { to: "/tickets", label: "Tickets", end: true },
+      { to: "/wallet", label: "Wallet" },
+      { to: "/account", label: "Account" },
+    ];
+  return [
+    { to: "/", label: "Home", end: true },
+    { to: "/events", label: "Events", end: true },
+    { to: "/signin", label: "Sign in" },
+  ];
+}
+
+// Screens with their own button bar at the bottom (checkout, verify, sign-in) hide the tabs.
+const NO_TABS = [/^\/signin/, /^\/signup/, /^\/setup/, /^\/verify/, /^\/events\/[^/]+/, /^\/tickets\/[^/]+\/resell/];
+
+export function RoleTabBar() {
+  const { me, signedIn, ready } = useAuth();
+  const { pathname } = useLocation();
+  if (!ready || NO_TABS.some((r) => r.test(pathname))) return null;
+  return (
+    <nav className="tabbar" aria-label="Main">
+      {navFor(me?.role, signedIn).map((item) => (
+        <NavLink key={item.to} to={item.to} end={item.end}>
+          {item.label}
+        </NavLink>
+      ))}
+    </nav>
+  );
+}
+
+// Extra pages per role that don't need a tab of their own.
+function moreFor(role: string | undefined): NavItem[] {
+  if (role === "admin")
+    return [
+      { to: "/admin/people", label: "People and roles" },
+      { to: "/events", label: "Browse events as a fan" },
+      { to: "/account", label: "My account" },
+    ];
+  if (role === "promoter")
+    return [
+      { to: "/promoter/apply", label: "My promoter details" },
+      { to: "/account", label: "My account" },
+    ];
+  return [
+    { to: "/wishlist", label: "Wishlist" },
+    { to: "/verify?next=/account", label: "Verify my account" },
+    { to: "/account", label: "My account" },
+  ];
+}
+
+// Slush-style round plus button that opens a dropdown and turns into a cross.
+export function PlusMenu() {
+  const { me, signOut } = useAuth();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const { pathname } = useLocation();
+
+  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+
+  const items = [...navFor(me?.role, true), ...moreFor(me?.role)].filter((item, i, all) => all.findIndex((x) => x.to === item.to) === i);
+  const roleLabel = me?.role === "admin" ? "Admin" : me?.role === "promoter" ? "Promoter" : "Fan";
+
+  return (
+    <div className="plus" ref={ref}>
+      <motion.button
+        type="button"
+        className="plus-btn"
+        aria-label={open ? "Close menu" : "Open menu"}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={() => setOpen((o) => !o)}
+        animate={{ rotate: open ? 45 : 0, backgroundColor: open ? "#000" : "#fff", color: open ? "#fff" : "#000" }}
+        whileTap={{ scale: 0.9 }}
+        transition={{ type: "spring", stiffness: 420, damping: 22 }}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+          <path d="M12 4v16M4 12h16" />
+        </svg>
+      </motion.button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            className="plus-panel"
+            role="menu"
+            initial={{ opacity: 0, y: -10, scale: 0.94 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.96 }}
+            transition={{ type: "spring", stiffness: 420, damping: 28 }}
+          >
+            <div className="plus-head">
+              <strong>{me?.fullName || "Your account"}</strong>
+              <span className="pill">{roleLabel}</span>
+            </div>
+            {items.map((item, i) => (
+              <motion.div key={item.to} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.03 * i }}>
+                <NavLink to={item.to} end={item.end} role="menuitem" className="plus-item">
+                  {item.label}
+                </NavLink>
+              </motion.div>
+            ))}
+            <button
+              type="button"
+              role="menuitem"
+              className="plus-item plus-out"
+              onClick={async () => {
+                await signOut();
+                navigate("/");
+              }}
+            >
+              Sign out
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export function TopBar({ back }: { back?: string }) {
   const { signedIn, me, signOut } = useAuth();
   const navigate = useNavigate();
@@ -190,22 +346,15 @@ export function TopBar({ back }: { back?: string }) {
           <Logo size={0.78} />
         </Link>
       )}
+      <nav className="topnav" aria-label="Main">
+        {navFor(me?.role, signedIn).map((item) => (
+          <NavLink key={item.to} to={item.to} end={item.end}>
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
       {signedIn ? (
-        <div className="account">
-          <Link to={me?.role === "fan" ? "/wallet" : home} className="account-name">
-            {me?.fullName?.split(" ")[0] || "Account"}
-          </Link>
-          <button
-            type="button"
-            className="account-out"
-            onClick={async () => {
-              await signOut();
-              navigate("/");
-            }}
-          >
-            Sign out
-          </button>
-        </div>
+        <PlusMenu />
       ) : (
         <Link to="/signin" className="btn btn-ghost btn-sm" style={{ minHeight: 44 }}>
           Sign in
