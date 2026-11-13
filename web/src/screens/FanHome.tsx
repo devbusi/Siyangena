@@ -80,7 +80,6 @@ export function Discover() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ type: "spring", stiffness: 300, damping: 26, delay: i * 0.05 }}
-                  whileHover={c.to ? { y: -4 } : undefined}
                 >
                   {c.to ? (
                     <Link to={c.to} className="event-card">

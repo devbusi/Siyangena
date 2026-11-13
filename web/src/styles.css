@@ -19,7 +19,6 @@
 
   --font: "Archivo Variable", "Archivo", ui-sans-serif, system-ui, sans-serif;
   --stroke: 2.5px solid #000;
-  --edge: 0 4px 0 #000;
 
   --r-sm: 12px;
   --r-md: 18px;
@@ -181,6 +180,7 @@ button {
 }
 
 .personas button {
+  transition: background-color 0.18s ease, color 0.18s ease;
   border: 0;
   background: transparent;
   border-radius: var(--r-pill);
@@ -197,7 +197,7 @@ button {
   color: #fff;
 }
 
-/* ---------- Buttons: outlined pills with a hard edge you press into ---------- */
+/* ---------- Buttons: flat outlined pills, fill swaps on hover ---------- */
 
 .btn {
   display: inline-flex;
@@ -215,13 +215,33 @@ button {
   cursor: pointer;
   text-decoration: none;
   user-select: none;
-  box-shadow: var(--edge);
+  transition: background-color 0.18s ease, color 0.18s ease;
 }
 
 .btn-primary {
   background: #000;
   color: #fff;
-  box-shadow: 0 4px 0 var(--cobalt);
+}
+
+@media (hover: hover) {
+  .btn-primary:not(:disabled):hover {
+    background: var(--cobalt);
+  }
+  .btn-sun:not(:disabled):hover,
+  .btn-ghost:not(:disabled):hover,
+  .chip:hover,
+  .tabbar a:not(.active):hover,
+  .personas button:not([aria-pressed="true"]):hover {
+    background: #000;
+    color: #fff;
+  }
+  .choice:not([aria-pressed="true"]):hover,
+  .scene:not([aria-checked="true"]):hover {
+    background: var(--sun-wash);
+  }
+  .event-card:hover .event-body {
+    background: var(--sun);
+  }
 }
 
 .btn-sun {
@@ -475,7 +495,6 @@ button {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 6px 16px;
-  box-shadow: 0 6px 0 #000;
 }
 
 .ticket::before,
@@ -647,7 +666,6 @@ input[type="range"] {
   border-radius: 50%;
   border: var(--stroke);
   background: #fff;
-  box-shadow: 0 3px 0 #000;
   font-size: 1.5rem;
   font-weight: 800;
   cursor: pointer;
@@ -689,6 +707,7 @@ input[type="range"] {
 }
 
 .chip {
+  transition: background-color 0.18s ease, color 0.18s ease;
   border: var(--stroke);
   background: #fff;
   border-radius: var(--r-pill);
@@ -727,6 +746,7 @@ input[type="range"] {
 }
 
 .event-body {
+  transition: background-color 0.2s ease;
   padding: 14px 16px 16px;
   display: flex;
   justify-content: space-between;
@@ -785,10 +805,10 @@ input[type="range"] {
   border: var(--stroke);
   padding: 4px;
   border-radius: var(--r-pill);
-  box-shadow: var(--edge);
 }
 
 .tabbar a {
+  transition: background-color 0.18s ease, color 0.18s ease;
   color: var(--ink);
   text-decoration: none;
   font-weight: 800;
@@ -936,6 +956,7 @@ input[type="range"] {
 }
 
 .choice {
+  transition: background-color 0.18s ease, color 0.18s ease;
   border: var(--stroke);
   background: #fff;
   border-radius: var(--r-md);
@@ -950,7 +971,6 @@ input[type="range"] {
 
 .choice[aria-pressed="true"] {
   background: var(--sun);
-  box-shadow: var(--edge);
 }
 
 .scene-grid {
@@ -960,6 +980,7 @@ input[type="range"] {
 }
 
 .scene {
+  transition: background-color 0.18s ease, color 0.18s ease;
   border: var(--stroke);
   border-radius: var(--r-md);
   overflow: hidden;
@@ -973,7 +994,6 @@ input[type="range"] {
 
 .scene[aria-checked="true"] {
   background: var(--sun);
-  box-shadow: var(--edge);
 }
 
 .scene .event-art {

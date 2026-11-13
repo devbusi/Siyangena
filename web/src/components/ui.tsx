@@ -7,22 +7,17 @@ import type { Tone } from "../lib/format";
 const spring = { type: "spring" as const, stiffness: 520, damping: 22 };
 
 type Variant = "primary" | "sun" | "ghost";
-const EDGE: Record<Variant, string> = { primary: "#2440ff", sun: "#000", ghost: "#000" };
 
-// Outlined pill with a hard edge underneath. Hover lifts it, press pushes it into the edge.
+// Flat outlined pill, like Slush: hover swaps the fill (CSS, hover devices only), tap gives a quick squash.
 export function Button({
   variant = "primary",
   block,
   className = "",
   ...props
 }: HTMLMotionProps<"button"> & { variant?: Variant; block?: boolean }) {
-  const edge = EDGE[variant];
   return (
     <motion.button
-      initial={false}
-      animate={{ y: 0, boxShadow: `0 4px 0 ${edge}` }}
-      whileHover={props.disabled ? undefined : { y: -2, boxShadow: `0 6px 0 ${edge}` }}
-      whileTap={props.disabled ? undefined : { y: 3, boxShadow: `0 1px 0 ${edge}`, scale: 0.98 }}
+      whileTap={props.disabled ? undefined : { scale: 0.95 }}
       transition={spring}
       className={`btn btn-${variant} ${block ? "btn-block" : ""} ${className}`}
       {...props}
