@@ -14,6 +14,7 @@ import { Drop } from "../drop-logic/Drop";
 import { Fans } from "../fan-logic/Fans";
 import { Mandates } from "../mandate-logic/Mandates";
 import { Events } from "../event-logic/Events";
+import { notify, ticketsLink } from "../../lib/sms";
 
 const dropService = new Drop();
 const fanService = new Fans();
@@ -282,6 +283,11 @@ export class Sales {
     stats.revenueRlusd = addAmounts(stats.revenueRlusd, p.amount);
     save();
 
+    const when = new Date(drop.startsAt).toLocaleString("en-ZA", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Johannesburg" });
+    notify(
+      intent.fanId,
+      `Siyangena: your ${intent.quantity === 1 ? "ticket" : `${intent.quantity} tickets`} for ${drop.name} (${drop.venue}, ${when}) ${intent.quantity === 1 ? "is" : "are"} in your wallet. Show ${intent.quantity === 1 ? "it" : "them"} at the door: ${ticketsLink()}`,
+    );
     events.emit("sale.ticket_sent", `Sent ${intent.quantity} ticket(s) to ${intent.fanId}`, {
       fanId: intent.fanId,
       eventId: drop.id,

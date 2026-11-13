@@ -11,6 +11,7 @@ import { Drop } from "../drop-logic/Drop";
 import { Fans } from "../fan-logic/Fans";
 import { Mandates } from "../mandate-logic/Mandates";
 import { Events } from "../event-logic/Events";
+import { notify, ticketsLink } from "../../lib/sms";
 
 const dropService = new Drop();
 const fanService = new Fans();
@@ -344,6 +345,8 @@ export class Resale {
         amountRlusd: zarToSettle(Number(listing.totalZar)),
         txHash: outer.hash,
       });
+      notify(record.sellerFanId, `Siyangena: your ${drop.name} ticket sold to a verified fan. R${listing.priceZar} is in your wallet.`);
+      notify(record.buyerFanId, `Siyangena: you got a ${drop.name} ticket at a fair price. It's in your wallet: ${ticketsLink()}`);
       events.emit(
         "resale.settled",
         `${record.sellerFanId} sold to ${record.buyerFanId} in one Batch: R${listing.priceZar} + R${listing.feeZar} fee to promoter`,

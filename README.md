@@ -62,7 +62,8 @@ scripts/   setup (wallets, allowances, ticket issuance) and the scripted demo
 
 1. In the Supabase SQL editor, run `supabase/migrations/001_accounts_roles_events.sql`.
 2. Authentication > Sign In / Providers > Email: turn off "Confirm email" while testing.
-3. Sign up in the app, then make yourself an admin in the SQL editor:
+3. Run `supabase/migrations/002_profile_phone.sql` too (adds the phone number from sign-up).
+4. Sign up in the app, then make yourself an admin in the SQL editor:
    `update public.profiles set role = 'admin' where email = 'you@example.com';`
 
 ## Run it
@@ -93,6 +94,10 @@ Or run all four demo moments end to end, with explorer links printed at the end:
 ```bash
 npm run demo
 ```
+
+## SMS
+
+Fans get a text when their tickets arrive (with a link to show at the door), when their resale ticket sells, and when they get a resale ticket. Add `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` and `APP_URL` to send them for real. Without them, the backend prints each message to its log.
 
 ## Deploy
 
