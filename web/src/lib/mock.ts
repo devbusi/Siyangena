@@ -339,17 +339,20 @@ export const mockApi: Api = {
   },
   openSales: async (id) => {
     const d = drop(id);
+    if (d.promoterId !== who().id) throw new Error("This isn't your event");
     d.state = "open";
     emit("drop.opened", { eventId: id });
     return { ...d };
   },
   closeSales: async (id) => {
     const d = drop(id);
+    if (d.promoterId !== who().id) throw new Error("This isn't your event");
     d.state = "closed";
     return { ...d };
   },
   updateEvent: async (id, body) => {
     const d = drop(id);
+    if (d.promoterId !== who().id) throw new Error("This isn't your event");
     if (body.resaleCapZar !== undefined) d.resaleCapZar = String(body.resaleCapZar);
     if (body.resaleFeePct !== undefined) d.resaleFeePct = body.resaleFeePct;
     if (body.maxPerFan !== undefined) d.maxPerFan = body.maxPerFan;

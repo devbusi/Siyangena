@@ -54,6 +54,9 @@ export function PromoterDesk() {
   }, [drop?.id, drop?.resaleCapZar, drop?.resaleFeePct, drop?.maxPerFan]);
 
   const open = drop?.state === "open";
+  const { me } = useAuth();
+  // Admins can look, but only the promoter who owns the event can change it.
+  const owner = Boolean(drop && me && drop.promoterId === me.id);
   const blocked = events.filter((e) => describe(e).tone === "blocked").length;
 
   async function run(fn: () => Promise<unknown>, ok?: string) {
@@ -76,7 +79,7 @@ export function PromoterDesk() {
 
   return (
     <div className="desk">
-      <TopBar back="/promoter" />
+      <TopBar back={me?.role === "admin" ? "/admin/events" : "/promoter"} />
       <Marquee rows={[[drop ? drop.name : "Your event", "Verified fans only", "Resale at your price", "Live"]]} size={34} speed={36} />
       {!drop ? (
         <Enter>
@@ -97,6 +100,7 @@ export function PromoterDesk() {
                 <h1 style={{ marginTop: 10, fontSize: "clamp(2.6rem, 6vw, 4.2rem)" }}>{drop.name}</h1>
                 <p className="hero-meta">{drop.venue}</p>
               </div>
+              {owner ? (
               <div className="row" style={{ gap: 8 }}>
                 <Button variant="ghost" onClick={() => navigate("/promoter/create")}>
                   New event
@@ -111,7 +115,15 @@ export function PromoterDesk() {
                   </Button>
                 )}
               </div>
+              ) : (
+                <span className="pill">View only</span>
+              )}
             </div>
+            {!owner && (
+              <p className="callout" style={{ marginTop: 12 }}>
+                You're seeing this as an admin. Only {drop.promoterName ?? "the promoter"} can open sales or change these rules.
+              </p>
+            )}
           </Enter>
 
           <Enter delay={0.06}>
@@ -148,7 +160,8 @@ export function PromoterDesk() {
                     run(() => api.updateEvent(id!, { resaleCapZar: capN, resaleFeePct: Number(fee), maxPerFan: Number(perFan) }), "Saved. New sales follow these rules.");
                   }}
                 >
-                  <h2 style={{ fontSize: "1.8rem" }}>Your rules</h2>
+                  <h2 style={{ fontSize: "1.8rem" }}>{owner ? "Your rules" : "Rules"}</h2>
+                  <fieldset disabled={!owner} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 14 }}>
                   <div className="field">
                     <label htmlFor="perfan">Tickets per fan</label>
                     <input id="perfan" className="input" inputMode="numeric" value={perFan} onChange={(e) => setPerFan(e.target.value)} />
@@ -166,9 +179,12 @@ export function PromoterDesk() {
                     <input id="fee" className="input" inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} />
                     <p className="faint">The buyer pays it. On a {rand(capN || face)} resale you earn {rand(((capN || face) * (Number(fee) || 0)) / 100, true)}.</p>
                   </div>
-                  <Button type="submit" block disabled={busy}>
-                    Save rules
-                  </Button>
+                  </fieldset>
+                  {owner && (
+                    <Button type="submit" block disabled={busy}>
+                      Save rules
+                    </Button>
+                  )}
                   <AnimatePresence>
                     {saved && (
                       <motion.p initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="callout callout-ok" onAnimationComplete={() => setTimeout(() => setSaved(""), 2500)}>
