@@ -13,6 +13,7 @@ import { useAuth } from "../lib/auth";
 import { useEvent } from "./EventPage";
 import { EventArt, salePill } from "./FanHome";
 import { dateLong } from "../lib/format";
+import { SA_PLACES } from "../lib/places";
 import type { Drop } from "@drop/shared";
 
 const toZar = (units: string | number) => Number(units) * ACTIVE.fxZarPerUnit;
@@ -516,6 +517,7 @@ export function CreateEvent() {
   const [scene, setScene] = useState<Scene>("longstreet");
   const [poster, setPoster] = useState(false);
   const [venue, setVenue] = useState("");
+  const [city, setCity] = useState("");
   const [date, setDate] = useState("2026-12-12T19:00");
   const [price, setPrice] = useState("1200");
   const [supply, setSupply] = useState("100");
@@ -539,7 +541,7 @@ export function CreateEvent() {
         name,
         venue,
         scene: poster ? undefined : scene,
-        city: SCENES.find((x) => x.id === scene)?.city,
+        city: city.trim() || undefined,
         posterUrl: poster && posterUrl ? posterUrl : undefined,
         startsAt: new Date(date).toISOString(),
         priceZar: p,
@@ -597,7 +599,6 @@ export function CreateEvent() {
                     whileTap={{ scale: 0.95 }}
                     onClick={() => {
                       setScene(s.id);
-                      if (!venue || SCENES.some((x) => venue === `${x.label}, ${x.city}`)) setVenue(`${s.label}, ${s.city}`);
                     }}
                   >
                     <div className="event-art">
@@ -613,7 +614,16 @@ export function CreateEvent() {
           <div className="form-row">
             <div className="field" style={{ flex: "2 1 220px" }}>
               <label htmlFor="venue">Venue</label>
-              <input id="venue" className="input" required value={venue} onChange={(e) => setVenue(e.target.value)} />
+              <input id="venue" className="input" required placeholder="The Venue, 12 Main Road" value={venue} onChange={(e) => setVenue(e.target.value)} />
+            </div>
+            <div className="field" style={{ flex: "1 1 200px" }}>
+              <label htmlFor="city">City or town</label>
+              <input id="city" className="input" required list="sa-places" placeholder="Polokwane" value={city} onChange={(e) => setCity(e.target.value)} />
+              <datalist id="sa-places">
+                {SA_PLACES.map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
             </div>
             <div className="field" style={{ flex: "1 1 200px" }}>
               <label htmlFor="date">Date and time</label>
@@ -688,7 +698,7 @@ export function CreateEvent() {
             <div>
               <h3>{name || "Your event"}</h3>
               <p className="faint">
-                {venue || "Venue"}, {date ? new Date(date).toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" }) : "Date"}, from {rand(p)}
+                {city || venue || "City"}, {date ? new Date(date).toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" }) : "Date"}, from {rand(p)}
               </p>
             </div>
             <span className="pill pill-live">On sale soon</span>

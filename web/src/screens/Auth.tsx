@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "motion/react";
 import { Button, Coin, Enter, Marquee, Stickers, TopBar } from "../components/ui";
+import { WalletArt } from "../components/WalletArt";
+import { EventArt, salePill } from "./FanHome";
+import { useApp } from "../lib/store";
+import { dateLong } from "../lib/format";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 
@@ -12,6 +16,8 @@ function homeFor(role?: string) {
 export function Landing() {
   const navigate = useNavigate();
   const { me } = useAuth();
+  const { drops } = useApp();
+  const featured = drops.slice(0, 3);
   return (
     <div className="phone">
       <TopBar />
@@ -26,36 +32,98 @@ export function Landing() {
           />
         </div>
       </Enter>
-      <Enter delay={0.05}>
-        <h1>Ziwaphi vandag? Siyangena.</h1>
-        <p style={{ margin: "14px 0 0" }}>
-          <span className="tile tired-tile">Tired of missing out the second sales open?</span>
-        </p>
-        <p className="muted" style={{ marginTop: 14 }}>
-          Scalpers have bots. Now fans have agents. Buy real tickets at face value, or add an agent that buys the moment sales open, within limits you set.
-        </p>
-      </Enter>
-      <Enter delay={0.1}>
-        <div className="stack" style={{ marginTop: 24 }}>
-          {me ? (
-            <Button block onClick={() => navigate(homeFor(me.role))}>
-              {me.role === "fan" ? "Find tickets" : "Go to my dashboard"}
-            </Button>
-          ) : (
-            <>
-              <Button block onClick={() => navigate("/signup")}>
-                Create my account
-              </Button>
-              <Button variant="ghost" block onClick={() => navigate("/events")}>
-                Browse events first
-              </Button>
-              <p className="faint" style={{ textAlign: "center" }}>
-                Run events? <Link to="/signup?as=promoter">Sell with Siyangena</Link>
-              </p>
-            </>
-          )}
+
+      <section className="landing-hero wide">
+        <Enter delay={0.05}>
+          <h1>Ziwaphi vandag? Siyangena.</h1>
+          <p style={{ margin: "16px 0 0", position: "relative", zIndex: 2 }}>
+            <span className="tile tired-tile">Tired of missing out the second sales open?</span>
+          </p>
+          <p className="muted" style={{ marginTop: 16, maxWidth: 560 }}>
+            Scalpers have bots. Now fans have agents. Buy real tickets at face value, or add an agent that buys the moment sales open, within limits you set.
+          </p>
+          <div className="tag-row" style={{ marginTop: 22 }}>
+            {me ? (
+              <Button onClick={() => navigate(homeFor(me.role))}>{me.role === "fan" ? "Find tickets" : "Go to my dashboard"}</Button>
+            ) : (
+              <>
+                <Button onClick={() => navigate("/signup")}>Create my account</Button>
+                <Button variant="lilac" onClick={() => navigate("/events")}>
+                  Browse events
+                </Button>
+              </>
+            )}
+          </div>
+        </Enter>
+        <Enter delay={0.1}>
+          <WalletArt />
+        </Enter>
+      </section>
+
+      <section className="wide">
+        <h2 className="section-title">How it works</h2>
+        <div className="landing-steps">
+          {[
+            { t: "Verify once", d: "One real person gets one ticket wallet. Bots and ticket farms can't get in.", bg: "#8ec5ff" },
+            { t: "Buy or add an agent", d: "Buy at face value yourself, or let your agent buy the second sales open, within your limits.", bg: "var(--sun)" },
+            { t: "Show up", d: "Your ticket is real and in your name. No screenshots, no fakes, no drama at the door.", bg: "var(--mint)" },
+          ].map((s) => (
+            <div key={s.t} className="landing-step" style={{ background: s.bg }}>
+              <h3>{s.t}</h3>
+              <p style={{ fontSize: "1.1rem" }}>{s.d}</p>
+            </div>
+          ))}
         </div>
-      </Enter>
+        <div className="landing-pair" style={{ marginTop: 14 }}>
+          <div className="landing-step" style={{ background: "var(--lilac)" }}>
+            <h3>Can't go?</h3>
+            <p style={{ fontSize: "1.1rem" }}>Resell to a verified fan at the promoter's cap. You get your money back, and nobody profits off you.</p>
+          </div>
+          <div className="landing-step" style={{ background: "var(--coral)" }}>
+            <h3>Fakes fail</h3>
+            <p style={{ fontSize: "1.1rem" }}>A copy, a screenshot or a ticket sold off the app never gets through the door.</p>
+          </div>
+        </div>
+      </section>
+
+      {featured.length > 0 && (
+        <section className="wide">
+          <div className="row" style={{ flexWrap: "wrap" }}>
+            <h2 className="section-title">Events near you</h2>
+            <Button variant="ghost" className="btn-sm" onClick={() => navigate("/events")}>
+              See all events
+            </Button>
+          </div>
+          <div className="landing-events">
+            {featured.map((d) => (
+              <Link key={d.id} to={`/events/${d.id}`} className="event-card">
+                <div className="event-art">
+                  <EventArt drop={d} />
+                </div>
+                <div className="event-body">
+                  <div>
+                    <h3>{d.name}</h3>
+                    <p className="faint">
+                      {d.city || d.venue}, {dateLong(d.startsAt)}
+                    </p>
+                  </div>
+                  <span className={`pill ${salePill(d).tone}`}>{salePill(d).label}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="landing-promoter wide" style={{ marginTop: 48 }}>
+        <div>
+          <h2 style={{ fontSize: "clamp(2.4rem, 5vw, 4rem)" }}>Promoters: sell out fairly</h2>
+          <p style={{ marginTop: 10, fontSize: "1.15rem" }}>Set the price, the limit per fan and the resale cap. Earn a fee on every resale, from Musina to Gqeberha.</p>
+        </div>
+        <Button variant="sun" onClick={() => navigate(me ? "/promoter" : "/signup?as=promoter")}>
+          Sell with Siyangena
+        </Button>
+      </section>
     </div>
   );
 }
@@ -65,7 +133,8 @@ export function SignUp() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [role, setRole] = useState<"fan" | "promoter">(params.get("as") === "promoter" ? "promoter" : "fan");
-  const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -77,7 +146,8 @@ export function SignUp() {
     setError("");
     setBusy(true);
     try {
-      const result = await signUp({ email: email.trim(), password, fullName: fullName.trim(), role });
+      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+      const result = await signUp({ email: email.trim(), password, fullName, role });
       if (result.needsConfirm) setConfirm(true);
       else navigate(`/setup?next=${role === "promoter" ? "/promoter" : params.get("next") || "/events"}`);
     } catch (err) {
@@ -122,9 +192,15 @@ export function SignUp() {
               <span className="muted">Sell tickets, set your rules, earn on resale. We check every promoter first.</span>
             </button>
           </div>
-          <div className="field">
-            <label htmlFor="name">{role === "promoter" ? "Your name" : "Full name"}</label>
-            <input id="name" className="input" required autoComplete="name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          <div className="form-row">
+            <div className="field">
+              <label htmlFor="first">First name</label>
+              <input id="first" className="input" required autoComplete="given-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+            </div>
+            <div className="field">
+              <label htmlFor="last">Last name</label>
+              <input id="last" className="input" required autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+            </div>
           </div>
           <div className="field">
             <label htmlFor="email">Email</label>

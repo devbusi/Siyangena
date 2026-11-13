@@ -1318,3 +1318,179 @@ input[type="range"] {
     font-size: 2.6rem !important;
   }
 }
+
+/* ---------- Header nav on desktop, bottom tabs on phones ---------- */
+
+.topnav {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .topnav {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border: var(--stroke);
+    border-radius: var(--r-pill);
+    background: #fff;
+    margin-left: auto;
+    margin-right: 8px;
+  }
+  .topnav a {
+    color: var(--ink);
+    text-decoration: none;
+    font-weight: 800;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    padding: 10px 16px;
+    border-radius: var(--r-pill);
+    transition: background-color 0.18s ease, color 0.18s ease;
+  }
+  .topnav a.active {
+    background: #000;
+    color: #fff;
+  }
+  .topnav a:not(.active):hover {
+    background: #000;
+    color: #fff;
+  }
+  .tabbar {
+    display: none;
+  }
+  .phone {
+    padding-bottom: 60px;
+  }
+}
+
+/* ---------- Wallet hero art ---------- */
+
+.wallet-art {
+  background: var(--mint);
+  min-height: 340px;
+}
+.wallet-stripe {
+  position: absolute;
+  inset: 0;
+  background: #c9f3df;
+  clip-path: polygon(0 30%, 100% 78%, 100% 100%, 0 52%);
+}
+.wallet-coin {
+  position: absolute;
+  z-index: 2;
+  cursor: grab;
+  touch-action: none;
+}
+.wallet {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  z-index: 5;
+  max-width: 80%;
+  height: auto;
+}
+.stub {
+  position: absolute;
+  width: min(230px, 46%);
+  height: 100px;
+  z-index: 3;
+  border: 3px solid #000;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  cursor: default;
+}
+.stub-name {
+  font-weight: 900;
+  font-stretch: 62%;
+  text-transform: uppercase;
+  font-size: 1.7rem;
+  line-height: 0.92;
+}
+.stub-sub {
+  font-weight: 800;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+.stub-tear {
+  align-self: stretch;
+  border-left: 3px dashed #000;
+}
+
+/* ---------- Landing ---------- */
+
+.landing-hero {
+  display: grid;
+  gap: 24px;
+}
+.landing-steps,
+.landing-pair,
+.landing-events {
+  display: grid;
+  gap: 14px;
+}
+.landing-step {
+  border: 3px solid #000;
+  border-radius: 22px;
+  padding: 20px;
+  display: grid;
+  gap: 8px;
+}
+.landing-step h3,
+.landing-pair h3 {
+  font-weight: 900;
+  font-stretch: 62%;
+  text-transform: uppercase;
+  font-size: 2.4rem;
+  line-height: 0.92;
+}
+.landing-promoter {
+  border: 3px solid #000;
+  border-radius: 26px;
+  background: #000;
+  color: #fff;
+  padding: 28px;
+  display: grid;
+  gap: 16px;
+}
+.landing-promoter h2 {
+  color: #fff;
+}
+.section-title {
+  margin: 48px 0 16px;
+  font-size: clamp(2.4rem, 6vw, 4.4rem);
+}
+
+@media (min-width: 900px) {
+  .landing-hero {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 40px;
+  }
+  .landing-hero h1 {
+    font-size: clamp(4.5rem, 7.4vw, 7.6rem);
+  }
+  .landing-steps,
+  .landing-events {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .landing-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .landing-promoter {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    padding: 40px;
+  }
+}
+
+.discover-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+}

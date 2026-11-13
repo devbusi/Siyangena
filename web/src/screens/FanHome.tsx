@@ -7,6 +7,7 @@ import { CityArt, SCENES, type Scene } from "../components/CityArt";
 import { api } from "../lib/api";
 import { dateLong, rand, time } from "../lib/format";
 import { useApp } from "../lib/store";
+import { MARQUEE_PLACES } from "../lib/places";
 
 export function TabBar() {
   return (
@@ -38,22 +39,36 @@ export function salePill(drop: Drop): { label: string; tone: string } {
   }
 }
 
-const CITIES = ["All", "Cape Town", "Johannesburg", "Durban"] as const;
-
 export function Discover() {
   const { drops } = useApp();
-  const [city, setCity] = useState<(typeof CITIES)[number]>("All");
-  const shown = drops.filter((d) => city === "All" || d.city === city || d.venue.includes(city));
+  const [city, setCity] = useState("All");
+  const [q, setQ] = useState("");
+  // Cities come from the events themselves, so anywhere in the country shows up.
+  const cities = ["All", ...Array.from(new Set(drops.map((d) => d.city).filter((c): c is string => Boolean(c)))).sort()];
+  const needle = q.trim().toLowerCase();
+  const shown = drops.filter(
+    (d) =>
+      (city === "All" || d.city === city) &&
+      (!needle || [d.name, d.venue, d.city, d.promoterName].some((v) => v?.toLowerCase().includes(needle))),
+  );
 
   return (
     <>
       <div className="phone">
         <TopBar />
         <Enter className="wide">
-          <Marquee rows={[["Cape Town", "Joburg", "Durban", "This weekend"]]} size={44} speed={34} />
-          <h1 style={{ margin: "4px 0 14px" }}>Events near you</h1>
-          <div className="chips" role="group" aria-label="City">
-            {CITIES.map((c) => (
+          <Marquee rows={[MARQUEE_PLACES]} size={44} speed={40} />
+          <div className="discover-head">
+            <h1 style={{ margin: "4px 0 0" }}>Events near you</h1>
+            <div className="field" style={{ flex: "1 1 280px", maxWidth: 420 }}>
+              <label htmlFor="search" className="sr-only">
+                Search events
+              </label>
+              <input id="search" className="input" type="search" placeholder="Search events, venues, towns" value={q} onChange={(e) => setQ(e.target.value)} />
+            </div>
+          </div>
+          <div className="chips" role="group" aria-label="City" style={{ marginTop: 14 }}>
+            {cities.map((c) => (
               <motion.button key={c} type="button" className="chip" aria-pressed={city === c} whileTap={{ scale: 0.92 }} onClick={() => setCity(c)}>
                 {c}
               </motion.button>
@@ -62,7 +77,7 @@ export function Discover() {
         </Enter>
         {shown.length === 0 ? (
           <div className="callout stack" style={{ gap: 6, marginTop: 18 }}>
-            <strong>No events here yet</strong>
+            <strong>{needle || city !== "All" ? "Nothing matches that" : "No events yet"}</strong>
             <p className="muted">New events show up the moment a promoter creates them. Add who you want to see to your wishlist.</p>
           </div>
         ) : (
