@@ -199,6 +199,13 @@ export class Accounts {
         await sleep(1500);
         continue;
       }
+      if (res.result === "tecPATH_DRY" && xrplConfig.settleAsset === "RLUSD") {
+        throw new ApiError(
+          502,
+          "LEDGER_ERROR",
+          `The test bank has no RLUSD left. Claim test RLUSD at tryrlusd.com for ${bank.address}, then top up again.`,
+        );
+      }
       throw new ApiError(502, "LEDGER_ERROR", `Top-up failed: ${res.result}`);
     }
     throw new ApiError(502, "LEDGER_ERROR", "Top-up failed");
