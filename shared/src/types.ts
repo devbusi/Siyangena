@@ -157,6 +157,17 @@ export interface Mandate {
   status: MandateStatus;
 }
 
+// One agent per event: its limits, whether it's running, and the event it's for.
+export interface MyAgent {
+  eventId: string;
+  eventName: string;
+  venue: string;
+  startsAt: string;
+  eventState: DropState;
+  mandate: Mandate;
+  running: boolean;
+}
+
 export interface PutMandateRequest {
   quantity: number;
   ceilingZar: number;

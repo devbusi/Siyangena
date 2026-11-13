@@ -11,6 +11,7 @@ import { CreateEvent, PromoterDesk, PromoterHome, PromoterOnboard } from "./scre
 import { Resell } from "./screens/Resell";
 import { AdminEvents, AdminOverview, AdminPeople, AdminReview } from "./screens/Admin";
 import { Account } from "./screens/Account";
+import { Agents } from "./screens/Agents";
 
 export function App() {
   return (
@@ -33,6 +34,7 @@ export function App() {
               <Route path="/events/:id/buy" element={<RequireAuth><BuyTickets /></RequireAuth>} />
               <Route path="/events/:id/agent" element={<RequireAuth><Mandate /></RequireAuth>} />
               <Route path="/events/:id/live" element={<RequireAuth><LiveSale /></RequireAuth>} />
+              <Route path="/agents" element={<RequireAuth><Agents /></RequireAuth>} />
               <Route path="/tickets" element={<RequireAuth><Tickets /></RequireAuth>} />
               <Route path="/tickets/:eventId/resell" element={<RequireAuth><Resell /></RequireAuth>} />
               <Route path="/wallet" element={<RequireAuth><WalletScreen /></RequireAuth>} />

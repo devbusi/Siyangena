@@ -36,7 +36,17 @@ export function EventPage() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [error, setError] = useState("");
 
+  const [hasAgent, setHasAgent] = useState(false);
+
   const soldOut = drop?.state === "sold_out";
+  // If this fan already set up an agent here, the button takes them to it instead of starting over.
+  useEffect(() => {
+    if (!id || !signedIn || me?.role !== "fan") return;
+    api
+      .getMandate(id)
+      .then((m) => setHasAgent(Boolean(m && m.status !== "cancelled")))
+      .catch(() => setHasAgent(false));
+  }, [id, signedIn, me?.role]);
   useEffect(() => {
     if (id && soldOut) api.listings(id).then(setListings).catch(() => setListings([]));
   }, [id, soldOut, tick]);
@@ -185,9 +195,15 @@ export function EventPage() {
               {drop.state === "open" ? "Buy tickets" : "Buy when sales open"}
             </Button>
           )}
-          <Button variant="lilac" block onClick={() => go(`/events/${drop.id}/agent`)}>
-            {soldOut ? "Add an agent to find me a ticket" : "Add an agent"}
-          </Button>
+          {hasAgent ? (
+            <Button variant="lilac" block onClick={() => navigate(`/events/${drop.id}/live`)}>
+              Watch my agent
+            </Button>
+          ) : (
+            <Button variant="lilac" block onClick={() => go(`/events/${drop.id}/agent`)}>
+              {soldOut ? "Add an agent to find me a ticket" : "Add an agent"}
+            </Button>
+          )}
         </div>
       </div>
     </>

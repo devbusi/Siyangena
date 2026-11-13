@@ -8,6 +8,7 @@ import type {
   FanWallet,
   Listing,
   Mandate,
+  MyAgent,
   Me,
   PromoterApplication,
   PromoterStats,
@@ -45,6 +46,7 @@ export interface Api {
   topUp(amountZar: number): Promise<FanWallet>;
   tickets(eventId?: string): Promise<FanTickets>;
   apply(input: ApplicationInput): Promise<PromoterApplication>;
+  myAgents(): Promise<MyAgent[]>;
   getMandate(eventId: string): Promise<Mandate | null>;
   putMandate(eventId: string, body: PutMandateRequest): Promise<Mandate>;
   buy(eventId: string, quantity: number): Promise<{ requestId: string }>;
@@ -113,6 +115,7 @@ const realApi: Api = {
   topUp: (amountZar) => call("POST", "/me/topup", { amountZar }),
   tickets: (eventId) => call("GET", `/me/tickets${eventId ? `?eventId=${eventId}` : ""}`),
   apply: (input) => call("POST", "/me/promoter-application", input),
+  myAgents: () => call("GET", "/me/agents"),
   getMandate: (eventId) => call("GET", `/me/events/${eventId}/mandate`),
   putMandate: (eventId, body) => call("PUT", `/me/events/${eventId}/mandate`, body),
   buy: (eventId, quantity) => call("POST", `/me/events/${eventId}/buy`, { quantity }),

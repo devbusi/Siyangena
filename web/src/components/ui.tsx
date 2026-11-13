@@ -198,9 +198,9 @@ export function navFor(role: string | undefined, signedIn: boolean): NavItem[] {
   if (signedIn)
     return [
       { to: "/events", label: "Events", end: true },
+      { to: "/agents", label: "Agents" },
       { to: "/tickets", label: "Tickets", end: true },
       { to: "/wallet", label: "Wallet" },
-      { to: "/account", label: "Account" },
     ];
   return [
     { to: "/", label: "Home", end: true },

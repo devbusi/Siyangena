@@ -257,6 +257,16 @@ export const mockApi: Api = {
     applications[u.id] = { userId: u.id, ...input, status: "pending", createdAt: new Date().toISOString(), email: u.email };
     return applications[u.id];
   },
+  myAgents: async () => {
+    const me = who().id;
+    return Object.values(mandates)
+      .filter((m) => m.fanId === me && m.status !== "cancelled")
+      .flatMap((m) => {
+        const d = drops.find((x) => x.id === m.eventId);
+        if (!d) return [];
+        return [{ eventId: d.id, eventName: d.name, venue: d.venue, startsAt: d.startsAt, eventState: d.state, mandate: m, running: false }];
+      });
+  },
   getMandate: async (eventId) => mandates[`${who().id}:${eventId}`] ?? null,
   putMandate: async (eventId, body) => {
     const id = `${who().id}:${eventId}`;

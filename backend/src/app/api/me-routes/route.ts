@@ -102,6 +102,37 @@ router.post("/promoter-application", validate(ApplicationDto), async (req: Reque
   }
 });
 
+// Every agent this person has set up, across events, newest event first.
+router.get("/agents", async (req: Request, res: Response) => {
+  try {
+    const id = me(req).id;
+    const list = mandateService
+      .listForFan(id)
+      .filter((m) => m.status !== "cancelled")
+      .map((mandate) => {
+        try {
+          const d = dropService.getRecord(mandate.eventId);
+          return {
+            eventId: d.id,
+            eventName: d.name,
+            venue: d.venue,
+            startsAt: d.startsAt,
+            eventState: d.state,
+            mandate,
+            running: agentRuns.isRunning(id, d.id),
+          };
+        } catch {
+          return null; // the event was removed
+        }
+      })
+      .filter((a) => a !== null)
+      .sort((a, b) => String(b!.startsAt).localeCompare(String(a!.startsAt)));
+    res.json({ success: true, data: list });
+  } catch (error) {
+    sendError(res, error, "Failed to load your agents");
+  }
+});
+
 // ---- Per event ----
 
 router.get("/events/:eventId/mandate", async (req: Request, res: Response) => {

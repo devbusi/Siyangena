@@ -28,6 +28,13 @@ export class Mandates {
     return mandate;
   }
 
+  // Every event this fan has given an agent limits for.
+  listForFan(fanId: string): Mandate[] {
+    return Object.entries(state.mandates)
+      .filter(([k]) => k.startsWith(`${fanId}:`))
+      .map(([k, m]) => ({ ...m, eventId: m.eventId ?? k.slice(fanId.length + 1) }));
+  }
+
   findMandate(fanId: string, eventId?: string): Mandate | null {
     try {
       return state.mandates[key(fanId, eventIdOrFeatured(eventId))] ?? null;
