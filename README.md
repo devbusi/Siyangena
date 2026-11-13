@@ -38,7 +38,7 @@ Payments settle in RLUSD on Testnet (or XRP on Devnet). The app shows rands only
 ```
 shared/    types, network config and memo format shared by everything
 backend/   Express API, promoter wallet, XRPL logic, live event stream (SSE)
-agent/     the fan's agent: MCP server with 9 tools, Claude runner, Batch signer
+agent/     the fan's agent: MCP server with 9 tools, AI runner, Batch signer
 web/       React app for fans and promoters
 scripts/   setup (wallets, allowances, ticket issuance) and the scripted demo
 ```
@@ -56,7 +56,7 @@ npm run web       # app on http://localhost:5173
 
 Set `HUMAN_API_KEY` in `.env` and the same value as `VITE_HUMAN_API_KEY` in `web/.env` so the app can save limits and promoter rules. Agents never get this key.
 
-Add `ANTHROPIC_API_KEY` to `.env` to run the agent on Claude. Without it, the agent falls back to a simple policy so the demo still works.
+Add `ANTHROPIC_API_KEY` to `.env` to run the agent with the AI model. Without it, the agent falls back to a simple policy so the demo still works.
 
 Start an agent on its own:
 
