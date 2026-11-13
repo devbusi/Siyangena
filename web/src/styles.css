@@ -3,8 +3,8 @@
   --paper: #ffffff;
   --card: #ffffff;
   --ink: #000000;
-  --ink-soft: #3b3d4a;
-  --ink-faint: #6b6e7d;
+  --ink-soft: #000000;
+  --ink-faint: #000000;
   --line: #000000;
   --cobalt: #2440ff;
   --cobalt-deep: #1626b8;
@@ -33,6 +33,7 @@
 html,
 body {
   margin: 0;
+  font-weight: 500;
   background: var(--sky);
   color: var(--ink);
   font-family: var(--font);
@@ -90,12 +91,16 @@ button {
 }
 
 .muted {
-  color: var(--ink-soft);
+  color: #000;
+  font-size: 1.08rem;
+  font-weight: 500;
+  line-height: 1.45;
 }
 
 .faint {
-  color: var(--ink-faint);
-  font-size: 0.875rem;
+  color: #000;
+  font-size: 0.92rem;
+  font-weight: 500;
 }
 
 /* ---------- App frame: a white window with a black outline on sky ---------- */
@@ -1200,4 +1205,10 @@ input[type="range"] {
 .desk .marquee {
   margin-left: -24px;
   margin-right: -24px;
+}
+
+@media (min-width: 900px) {
+  .muted {
+    font-size: 1.25rem;
+  }
 }

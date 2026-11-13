@@ -87,7 +87,7 @@ export function Discover() {
                       {inner}
                     </Link>
                   ) : (
-                    <div className="event-card" style={{ opacity: 0.85 }}>
+                    <div className="event-card">
                       {inner}
                     </div>
                   )}
