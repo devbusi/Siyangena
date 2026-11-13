@@ -13,6 +13,10 @@ services:
         value: "22"
       - key: XRPL_NETWORK
         value: testnet
+      - key: SETTLE_ASSET
+        value: XRP
+      - key: PLATFORM_FEE_PCT
+        value: "5"
       - key: HUMAN_API_KEY
         generateValue: true
       - key: SUPABASE_URL

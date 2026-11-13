@@ -24,6 +24,9 @@ export interface Profile {
   createdAt?: string;
 }
 
+// XRP a wallet keeps for the ledger's reserve (it isn't spendable).
+const KEEP_XRP = 3;
+
 const profiles = new Map<string, Profile>();
 const wallets = new Map<string, Wallet>(); // userId -> wallet
 const byAddress = new Map<string, string>(); // address -> userId
@@ -164,6 +167,27 @@ export class Accounts {
           LimitAmount: { currency: RLUSD_CURRENCY_HEX, issuer: xrplConfig.rlusdIssuer, value: "1000000000" },
         });
         if (trust.result !== "tesSUCCESS") throw new Error(`TrustSet failed: ${trust.result}`);
+      }
+
+      // Paying in test XRP: the faucet gives every new wallet 100 XRP. Send it to the test
+      // bank (the platform's float) so people start at R0 and add money like they would for real.
+      if (xrplConfig.settleAsset === "XRP" && process.env.BANK_SEED) {
+        try {
+          const bank = Wallet.fromSeed(process.env.BANK_SEED).address;
+          const balance = await xrplClient.getXrpBalance(wallet.address);
+          const extra = Math.floor((balance - KEEP_XRP) * 1e6) / 1e6;
+          if (extra > 0) {
+            const swept = await xrplClient.submitTx(wallet, {
+              TransactionType: "Payment",
+              Account: wallet.address,
+              Destination: bank,
+              Amount: settleAmount(String(extra)),
+            });
+            if (swept.result !== "tesSUCCESS") console.error(`Couldn't move the faucet XRP to the bank: ${swept.result}`);
+          }
+        } catch (error) {
+          console.error("Couldn't move the faucet XRP to the bank:", error instanceof Error ? error.message : error);
+        }
       }
 
       check(

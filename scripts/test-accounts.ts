@@ -2,6 +2,9 @@
 //
 //   npm run test-accounts          creates (or resets) the three accounts
 //   npm run test-flow              creates them, then runs the whole flow end to end
+//   npx tsx scripts/test-accounts.ts --reset-money
+//                                  empties the three test wallets back to R0 (the money goes
+//                                  to the test bank), so recordings start from Add money
 //   npm run test-clean             deletes every other account, all events and the saved app
 //                                  state, then creates the three accounts fresh. Stop the
 //                                  backend first, and start it again after.
@@ -16,6 +19,8 @@
 import path from "path";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import { Client, Wallet, xrpToDrops } from "xrpl";
+import { decryptSecret } from "../backend/src/lib/crypto";
 
 dotenv.config({ path: path.resolve(__dirname, "../.env"), quiet: true });
 
@@ -222,6 +227,37 @@ async function clean() {
   ok("app state cleared (wishes, alerts, payouts, history start fresh)");
 }
 
+// Send everything but the ledger reserve from the test wallets back to the test bank.
+async function resetMoney(ids: Record<Key, string>) {
+  const bankSeed = process.env.BANK_SEED;
+  if (!bankSeed || (process.env.SETTLE_ASSET || "").toUpperCase() !== "XRP") {
+    console.log("  skip  resetting money needs BANK_SEED and SETTLE_ASSET=XRP");
+    return;
+  }
+  const db = admin();
+  const bank = Wallet.fromSeed(bankSeed).address;
+  const wss = process.env.XRPL_WSS || ((process.env.XRPL_NETWORK || "testnet") === "devnet" ? "wss://s.devnet.rippletest.net:51233" : "wss://s.altnet.rippletest.net:51233");
+  const client = new Client(wss);
+  await client.connect();
+  try {
+    for (const p of PEOPLE) {
+      const { data } = await db.from("wallets").select("seed_encrypted").eq("user_id", ids[p.key]).maybeSingle();
+      if (!data) continue;
+      const w = Wallet.fromSeed(decryptSecret((data as any).seed_encrypted));
+      const balance = await client.getXrpBalance(w.address).catch(() => 0);
+      const extra = Math.floor((balance - 3) * 1e6) / 1e6;
+      if (extra <= 0) {
+        ok(`${p.email} already at R0`);
+        continue;
+      }
+      const res = await client.submitAndWait({ TransactionType: "Payment", Account: w.address, Destination: bank, Amount: xrpToDrops(String(extra)) }, { wallet: w, autofill: true });
+      ok(`${p.email}: moved ${extra} XRP to the test bank (${(res.result as any).meta?.TransactionResult ?? "sent"})`);
+    }
+  } finally {
+    await client.disconnect();
+  }
+}
+
 async function main() {
   if (process.argv.includes("--clean")) {
     if (!process.argv.includes("--yes")) {
@@ -232,7 +268,11 @@ async function main() {
     await clean();
   }
   step("Test accounts");
-  await ensureAccounts();
+  const ids = await ensureAccounts();
+  if (process.argv.includes("--reset-money") || process.argv.includes("--clean")) {
+    step("Emptying the test wallets back to R0");
+    await resetMoney(ids);
+  }
   console.log(`\n  Password for all three: ${TEST_PASSWORD}`);
   if (process.argv.includes("--flow")) await flow();
 }
