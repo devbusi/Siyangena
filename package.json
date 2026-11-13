@@ -6,17 +6,19 @@
   "workspaces": [
     "shared",
     "backend",
-    "agent"
+    "agent",
+    "web"
   ],
   "scripts": {
     "dev": "npm run dev -w backend",
     "start": "npm run start -w backend",
-    "typecheck": "npm run typecheck -w shared && npm run typecheck -w backend && npm run typecheck -w agent",
+    "typecheck": "npm run typecheck -w shared && npm run typecheck -w backend && npm run typecheck -w agent && npm run typecheck -w web",
     "preflight": "tsx scripts/preflight.ts",
     "setup": "tsx scripts/setup.ts",
     "demo": "tsx scripts/demo.ts",
     "agent": "npm run start -w agent --",
-    "mcp": "npm run mcp -w agent"
+    "mcp": "npm run mcp -w agent",
+    "web": "npm run dev -w web"
   },
   "devDependencies": {
     "@drop/shared": "*",
