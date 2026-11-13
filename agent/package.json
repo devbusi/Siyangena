@@ -1,0 +1,21 @@
+{
+  "name": "@drop/agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Siyangena fan agent: MCP tools over the promoter API and the XRP Ledger, a Claude runner, and a deterministic Batch signer.",
+  "main": "src/runner.ts",
+  "scripts": {
+    "start": "tsx src/runner.ts",
+    "mcp": "tsx src/mcp-server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "@drop/shared": "*",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "dotenv": "^17.3.1",
+    "tsx": "^4.20.6",
+    "xrpl": "^5.3.0",
+    "zod": "^4.6.5"
+  }
+}
