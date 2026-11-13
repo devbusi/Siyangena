@@ -44,8 +44,8 @@ export class Sales {
     const drop = dropService.getRecord();
     fanService.getContext(fanId);
 
-    if (drop.state === "sold_out") throw conflict("SOLD_OUT", "Drop is sold out");
-    if (drop.state !== "open") throw conflict("NOT_OPEN", `Drop is ${drop.state}`);
+    if (drop.state === "sold_out") throw conflict("SOLD_OUT", "This event is sold out");
+    if (drop.state !== "open") throw conflict("NOT_OPEN", `Sales are ${drop.state === "scheduled" ? "not open yet" : drop.state}`);
 
     fanService.assertVerified(fanId);
     const mandate = mandateService.assertWithinMandate(fanId, quantity, drop.priceZar);

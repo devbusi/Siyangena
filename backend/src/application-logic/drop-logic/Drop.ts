@@ -31,7 +31,7 @@ export class Drop {
 
   getRecord(): DropRecord {
     if (!state.drop) {
-      throw new ApiError(404, "NO_DROP", "No drop exists yet. Create one with POST /api/promoter/drop.");
+      throw new ApiError(404, "NO_DROP", "No event exists yet. Create one with POST /api/promoter/drop.");
     }
     return state.drop;
   }
@@ -104,11 +104,11 @@ export class Drop {
     const drop = this.getRecord();
     if (drop.state === "open") return this.toView(drop);
     if (drop.sold >= drop.supply) {
-      throw conflict("SOLD_OUT", "Drop is sold out");
+      throw conflict("SOLD_OUT", "This event is sold out");
     }
     drop.state = "open";
     save();
-    events.emit("drop.opened", `${drop.name} is open: ${drop.supply - drop.sold} tickets at R${zar(drop.priceZar)}`);
+    events.emit("drop.opened", `Sales opened for ${drop.name}: ${drop.supply - drop.sold} tickets at R${zar(drop.priceZar)}`);
     return this.toView(drop);
   }
 

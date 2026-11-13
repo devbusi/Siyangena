@@ -12,11 +12,11 @@ import { SubmitResult } from "./xrpl.types";
 async function createIssuance(params: { supply: number; name: string; venue: string; startsAt: string }) {
   const promoter = xrplWallet.getPromoterWallet();
   const metadata = {
-    ticker: "DROP",
+    ticker: "SIYA",
     name: params.name,
     desc: `${params.venue}, ${params.startsAt}`,
     asset_class: "other",
-    issuer_name: "Drop",
+    issuer_name: "Siyangena",
   };
 
   const result = await xrplClient.submitAsPromoter({

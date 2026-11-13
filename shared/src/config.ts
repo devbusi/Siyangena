@@ -48,8 +48,8 @@ export const MEMO_TYPE = "drop";
 
 // Demo drop from docs/PLAN.md section 2.
 export const DROP_DEFAULTS = {
-  name: "Drop Live: Cape Town",
-  venue: "Grand Arena, Cape Town",
+  name: "Sunset Sessions Live",
+  venue: "Long Street, Cape Town",
   startsAt: "2026-12-12T19:00:00+02:00",
   priceZar: 1200,
   supply: 3,
