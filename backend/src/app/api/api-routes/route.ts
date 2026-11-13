@@ -7,6 +7,9 @@ import resaleRoutes from "../resale-routes/route";
 import agentLogRoutes from "../agent-log-routes/route";
 import eventRoutes from "../event-routes/route";
 import agentRoutes from "../agent-routes/route";
+import meRoutes from "../me-routes/route";
+import adminRoutes from "../admin-routes/route";
+import dropsRoutes from "../drops-routes/route";
 import { xrplService } from "../../../xrpl/xrpl.service";
 
 const router = Router();
@@ -19,6 +22,9 @@ router.use("/resale", resaleRoutes);
 router.use("/agent-log", agentLogRoutes);
 router.use("/events", eventRoutes);
 router.use("/agents", agentRoutes);
+router.use("/me", meRoutes);
+router.use("/admin", adminRoutes);
+router.use("/drops", dropsRoutes);
 
 // GET /api/status: XRPL connection health
 router.get("/status", async (_req: Request, res: Response) => {
