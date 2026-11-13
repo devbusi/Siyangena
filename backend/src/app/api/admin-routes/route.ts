@@ -93,6 +93,14 @@ router.post("/change-requests/:userId/review", validate(ChangeReviewDto), async 
   }
 });
 
+router.get("/revenue", async (_req: Request, res: Response) => {
+  try {
+    res.json({ success: true, data: payouts.revenue() });
+  } catch (error) {
+    sendError(res, error, "Failed to load revenue");
+  }
+});
+
 router.get("/payouts", async (_req: Request, res: Response) => {
   try {
     res.json({ success: true, data: payouts.all() });

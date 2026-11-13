@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import type { AdminUser, ApplicationStatus, ChangeRequest, Drop, PromoterApplication, Role } from "@drop/shared";
+import type { AdminUser, ApplicationStatus, ChangeRequest, Drop, PlatformRevenue, PromoterApplication, Role } from "@drop/shared";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Enter, Marquee, TopBar } from "../components/ui";
 import { EventArt, salePill } from "./FanHome";
@@ -406,6 +406,7 @@ export function AdminOverview() {
   const [pending, setPending] = useState<PromoterApplication[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [payoutsWaiting, setPayoutsWaiting] = useState(0);
+  const [revenue, setRevenue] = useState<PlatformRevenue | null>(null);
   const [eventsWaiting, setEventsWaiting] = useState(0);
   const [changesWaiting, setChangesWaiting] = useState(0);
   useEffect(() => {
@@ -413,6 +414,7 @@ export function AdminOverview() {
     api.changeRequests().then((l) => setChangesWaiting(l.length)).catch(() => undefined);
     api.applications("pending").then(setPending).catch(() => undefined);
     api.users().then(setUsers).catch(() => undefined);
+    api.revenue().then(setRevenue).catch(() => undefined);
     api.allPayouts().then((l) => setPayoutsWaiting(l.filter((p) => p.status === "requested").length)).catch(() => undefined);
   }, []);
   const onSale = drops.filter((d) => d.state === "open").length;
@@ -420,7 +422,7 @@ export function AdminOverview() {
     { label: "Waiting for review", value: pending.length + eventsWaiting + changesWaiting, to: "/admin/review", bg: "var(--sun)", cta: `${pending.length} promoters, ${eventsWaiting} events, ${changesWaiting} changes` },
     { label: "People", value: users.length, to: "/admin/people", bg: "var(--mint)", cta: "See everyone" },
     { label: "Events", value: drops.length, to: "/admin/events", bg: "#8ec5ff", cta: `${onSale} on sale now` },
-    { label: "Payouts to make", value: payoutsWaiting, to: "/admin/payouts", bg: "var(--lilac)", cta: "Pay promoters" },
+    { label: "Siyangena earned", value: revenue ? rand(revenue.feesZar) : "…", to: "/admin/payouts", bg: "var(--lilac)", cta: revenue ? `${revenue.feePct}% of ${rand(Number(revenue.ticketSalesZar) + Number(revenue.resaleFeesZar))}${payoutsWaiting ? `, ${payoutsWaiting} payouts sending` : ""}` : "" },
   ];
   return (
     <div className="desk">

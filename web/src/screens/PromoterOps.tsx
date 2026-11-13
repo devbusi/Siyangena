@@ -345,8 +345,11 @@ export function PromoterPayouts() {
               <p className="faint">{s.kind === "business" ? "Registered business: paid as tickets sell" : "Independent: paid the morning after"}</p>
             </div>
             <div className="kpi">
-              <p style={{ fontWeight: 800 }}>Refunded to ticket holders</p>
-              <p className="stat-value num">{rand(s.refundedZar)}</p>
+              <p style={{ fontWeight: 800 }}>Siyangena fee</p>
+              <p className="stat-value num">{rand(s.platformFeeZar)}</p>
+              <p className="faint">
+                {s.platformFeePct}% of sales and resale fees{Number(s.refundedZar) > 0 ? `, after ${rand(s.refundedZar)} refunded` : ""}
+              </p>
             </div>
           </div>
 
@@ -363,6 +366,7 @@ export function PromoterPayouts() {
                       <th>Sales</th>
                       <th>Resale fees</th>
                       <th>Refunded</th>
+                      <th>Siyangena fee</th>
                       <th>Paid or on its way</th>
                       <th>Next payout</th>
                     </tr>
@@ -378,6 +382,7 @@ export function PromoterPayouts() {
                         <td className="num">{rand(e.salesZar)}</td>
                         <td className="num">{rand(e.feesZar)}</td>
                         <td className="num">{rand(e.refundedZar)}</td>
+                        <td className="num">{rand(e.platformFeeZar)}</td>
                         <td className="num">{rand(Number(e.paidZar) + Number(e.requestedZar))}</td>
                         <td>{e.state === "cancelled" ? "Cancelled" : e.held ? `${rand(Number(e.netZar) - Number(e.paidZar) - Number(e.requestedZar))} the morning after` : Number(e.availableZar) > 0 ? `${rand(e.availableZar)} sending now` : "Up to date"}</td>
 

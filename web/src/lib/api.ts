@@ -8,6 +8,7 @@ import type {
   DoorStats,
   Payout,
   PayoutSummary,
+  PlatformRevenue,
   TicketPass,
   Wish,
   ApplicationStatus,
@@ -97,6 +98,7 @@ export interface Api {
   users(): Promise<AdminUser[]>;
   setRole(userId: string, role: Role): Promise<void>;
   allPayouts(): Promise<Payout[]>;
+  revenue(): Promise<PlatformRevenue>;
   eventsInReview(): Promise<Drop[]>;
   reviewEvent(eventId: string, decision: "approved" | "needs_more", note?: string): Promise<Drop>;
   changeRequests(): Promise<ChangeRequest[]>;
@@ -224,6 +226,7 @@ const realApi: Api = {
   users: () => call("GET", "/admin/users"),
   setRole: (userId, role) => call("POST", `/admin/users/${userId}/role`, { role }),
   allPayouts: () => call("GET", "/admin/payouts"),
+  revenue: () => call("GET", "/admin/revenue"),
   markPayoutPaid: (id) => call("POST", `/admin/payouts/${id}/paid`, {}),
   eventsInReview: () => call("GET", "/admin/events/review"),
   reviewEvent: (id, decision, note) => call("POST", `/admin/events/${id}/review`, { decision, note }),

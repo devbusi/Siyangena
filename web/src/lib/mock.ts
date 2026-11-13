@@ -521,11 +521,13 @@ export const mockApi: Api = {
       const fees = Number(st.feesRlusd) * FX;
       const refunded = Number(d.cancel?.refundedZar ?? 0);
       const held = applications[u.id]?.kind !== "business" && d.state !== "cancelled" && new Date(d.startsAt).getTime() + 864e5 > Date.now();
-      const net = Math.max(0, sales + fees - refunded);
+      const gross = Math.max(0, sales + fees - refunded);
+      const platformFee = gross * 0.05;
+      const net = gross - platformFee;
       const paid = history.filter((p) => p.eventId === d.id && p.status === "paid").reduce((n, p) => n + Number(p.amountZar), 0);
       const requested = history.filter((p) => p.eventId === d.id && p.status === "requested").reduce((n, p) => n + Number(p.amountZar), 0);
       const available = held ? 0 : Math.max(0, net - paid - requested);
-      return { eventId: d.id, name: d.name, startsAt: d.startsAt, state: d.state, salesZar: sales.toFixed(2), feesZar: fees.toFixed(2), refundedZar: refunded.toFixed(2), held, netZar: net.toFixed(2), requestedZar: requested.toFixed(2), paidZar: paid.toFixed(2), availableZar: available.toFixed(2) };
+      return { eventId: d.id, name: d.name, startsAt: d.startsAt, state: d.state, salesZar: sales.toFixed(2), feesZar: fees.toFixed(2), refundedZar: refunded.toFixed(2), held, netZar: net.toFixed(2), platformFeeZar: platformFee.toFixed(2), requestedZar: requested.toFixed(2), paidZar: paid.toFixed(2), availableZar: available.toFixed(2) };
     });
     // Payouts are automatic: anything due goes straight out.
     const due = lines.filter((l) => Number(l.availableZar) > 0);
@@ -537,6 +539,8 @@ export const mockApi: Api = {
     const held = lines.filter((l) => l.held).reduce((n, l) => n + Number(l.netZar) - Number(l.paidZar) - Number(l.requestedZar), 0);
     return {
       earnedZar: sum("netZar").toFixed(2),
+      platformFeePct: 5,
+      platformFeeZar: lines.reduce((n, l) => n + Number(l.platformFeeZar), 0).toFixed(2),
       feesZar: sum("feesZar").toFixed(2),
       resales: mine.reduce((n, d) => n + statsFor(d.id).resales, 0),
       heldZar: held.toFixed(2),
@@ -562,6 +566,12 @@ export const mockApi: Api = {
     return p;
   },
   allPayouts: async () => payoutList,
+  revenue: async () => {
+    const sales = drops.reduce((n, d) => n + Number(statsFor(d.id).revenueRlusd) * FX, 0);
+    const resale = drops.reduce((n, d) => n + Number(statsFor(d.id).feesRlusd) * FX, 0);
+    const back = drops.reduce((n, d) => n + Number(d.cancel?.refundedZar ?? 0), 0);
+    return { feePct: 5, feesZar: (Math.max(0, sales + resale - back) * 0.05).toFixed(2), ticketSalesZar: sales.toFixed(2), resaleFeesZar: resale.toFixed(2), paidOutZar: payoutList.filter((p) => p.status === "paid").reduce((n, p) => n + Number(p.amountZar), 0).toFixed(2) };
+  },
   eventsInReview: async () => drops.filter((d) => d.review && d.review.status !== "approved" && d.state !== "cancelled").map((d) => ({ ...d })),
   reviewEvent: async (id, decision, note) => {
     const d = drop(id);

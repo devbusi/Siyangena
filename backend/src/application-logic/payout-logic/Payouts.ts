@@ -12,6 +12,10 @@ const money = new Money();
 
 const DAY = 24 * 60 * 60 * 1000;
 
+// Siyangena's commission, taken from the promoter's earnings before each payout. Buyers
+// pay face value; the promoter pays for the platform. Set PLATFORM_FEE_PCT to change it.
+export const PLATFORM_FEE_PCT = Number(process.env.PLATFORM_FEE_PCT ?? 5);
+
 // Only the last four digits of a bank account are ever shown.
 function maskBank(details?: string): string | undefined {
   if (!details) return undefined;
@@ -37,6 +41,7 @@ export class Payouts {
     let refunded = 0;
     let resales = 0;
     let available = 0;
+    let platformFees = 0;
     const lines = Object.values(state.drops)
       .filter((d) => d.promoterId === promoterId)
       .sort((a, b) => b.startsAt.localeCompare(a.startsAt))
@@ -45,7 +50,10 @@ export class Payouts {
         const sales = Number(settleToZar(s?.revenueRlusd ?? "0"));
         const fee = Number(settleToZar(s?.feesRlusd ?? "0"));
         const back = Number(d.cancel?.refundedZar ?? 0);
-        const net = Math.max(0, sales + fee - back);
+        const gross = Math.max(0, sales + fee - back);
+        const platformFee = (gross * PLATFORM_FEE_PCT) / 100;
+        const net = gross - platformFee;
+        platformFees += platformFee;
         const isHeld = kind === "independent" && d.state !== "cancelled" && new Date(d.startsAt).getTime() + DAY > now;
         const mine = history.filter((p) => p.eventId === d.id);
         const paidE = mine.filter((p) => p.status === "paid").reduce((n, p) => n + Number(p.amountZar), 0);
@@ -67,6 +75,7 @@ export class Payouts {
           refundedZar: zar(back),
           held: isHeld,
           netZar: zar(net),
+          platformFeeZar: zar(platformFee),
           requestedZar: zar(requestedE),
           paidZar: zar(paidE),
           availableZar: zar(availableE),
@@ -83,6 +92,8 @@ export class Payouts {
     const bank = maskBank(application?.payoutDetails);
     return {
       earnedZar: zar(earned),
+      platformFeePct: PLATFORM_FEE_PCT,
+      platformFeeZar: zar(platformFees),
       feesZar: zar(fees),
       resales,
       heldZar: zar(held),
@@ -167,6 +178,28 @@ export class Payouts {
     const tick = () => void this.autoRun().catch((e) => console.error("Payout run failed:", e instanceof Error ? e.message : e));
     setTimeout(tick, 10_000);
     setInterval(tick, 60_000);
+  }
+
+  // Siyangena's own takings across every promoter.
+  revenue() {
+    let sales = 0;
+    let resale = 0;
+    let back = 0;
+    for (const d of Object.values(state.drops)) {
+      const s = state.stats[d.id];
+      sales += Number(settleToZar(s?.revenueRlusd ?? "0"));
+      resale += Number(settleToZar(s?.feesRlusd ?? "0"));
+      back += Number(d.cancel?.refundedZar ?? 0);
+    }
+    const gross = Math.max(0, sales + resale - back);
+    const paidOut = Object.values(state.payouts).filter((p) => p.status === "paid").reduce((n, p) => n + Number(p.amountZar), 0);
+    return {
+      feePct: PLATFORM_FEE_PCT,
+      feesZar: zar((gross * PLATFORM_FEE_PCT) / 100),
+      ticketSalesZar: zar(sales),
+      resaleFeesZar: zar(resale),
+      paidOutZar: zar(paidOut),
+    };
   }
 
   all(): Payout[] {

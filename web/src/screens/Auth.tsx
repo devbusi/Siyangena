@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "motion/react";
-import { Button, Coin, Enter, Marquee, Stickers, TopBar } from "../components/ui";
+import { Button, Coin, Enter, Marquee, Stickers, TopBar, setBuyerMode } from "../components/ui";
 import { WalletArt } from "../components/WalletArt";
 import { EventArt, salePill } from "./FanHome";
 import { useApp } from "../lib/store";
@@ -13,10 +13,21 @@ function homeFor(role?: string) {
   return role === "admin" ? "/admin" : role === "promoter" ? "/promoter" : "/events";
 }
 
+// Only send someone back to a page that belongs to their role.
+function nextFor(role: string | undefined, next: string | null): string | null {
+  if (!next || !next.startsWith("/") || next.startsWith("/signin") || next.startsWith("/signup")) return null;
+  if (next.startsWith("/admin")) return role === "admin" ? next : null;
+  if (next.startsWith("/promoter")) return role === "promoter" || role === "admin" ? next : null;
+  const holderOnly = ["/tickets", "/wallet", "/agents", "/alerts", "/wishlist", "/verify", "/setup"];
+  if (holderOnly.some((p) => next.startsWith(p)) || /^\/events\/[^/]+\/(buy|agent|live)/.test(next)) return role === "fan" ? next : null;
+  return next;
+}
+
 export function Landing() {
   const navigate = useNavigate();
   const { me } = useAuth();
   const { drops } = useApp();
+  if (me && me.role !== "fan") return <Navigate to={homeFor(me.role)} replace />;
   const featured = drops.slice(0, 3);
   return (
     <div className="phone">
@@ -263,9 +274,13 @@ export function SignIn() {
     try {
       await signIn(email.trim(), password);
       const me = await refresh();
-      const next = params.get("next");
-      if (me && !me.walletReady) navigate(`/setup?next=${next || homeFor(me.role)}`);
-      else navigate(next || homeFor(me?.role));
+      // Everyone lands on their own home: ticket holders on events, promoters on their
+      // overview, admins on theirs. A saved "next" page only counts if it's theirs to see.
+      setBuyerMode(false);
+      const home = homeFor(me?.role);
+      const next = nextFor(me?.role, params.get("next"));
+      if (me?.role === "fan" && !me.walletReady) navigate(`/setup?next=${encodeURIComponent(next || home)}`);
+      else navigate(next || home);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't sign you in");
     } finally {
@@ -327,7 +342,7 @@ export function Setup() {
         const me = await refresh();
         if (cancelled) return;
         setDone(true);
-        setTimeout(() => navigate(params.get("next") || homeFor(me?.role)), 900);
+        setTimeout(() => navigate(nextFor(me?.role, params.get("next")) || homeFor(me?.role)), 900);
       })
       .catch((e) => !cancelled && setError(e instanceof Error ? e.message : "Couldn't set up your account"));
     return () => {

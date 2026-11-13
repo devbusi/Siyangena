@@ -511,6 +511,7 @@ export interface PayoutEventLine {
   refundedZar: string;
   held: boolean; // independent promoters are paid the morning after the event
   netZar: string;
+  platformFeeZar: string; // Siyangena's commission on this event
   requestedZar: string;
   paidZar: string;
   availableZar: string;
@@ -518,6 +519,8 @@ export interface PayoutEventLine {
 
 export interface PayoutSummary {
   earnedZar: string; // ticket sales + resale fees - refunds
+  platformFeePct: number;
+  platformFeeZar: string; // Siyangena's commission, taken before payout
   feesZar: string;
   resales: number;
   heldZar: string;
@@ -530,4 +533,13 @@ export interface PayoutSummary {
   nextPayoutAt?: string; // when held money is next paid out (independent promoters)
   events: PayoutEventLine[];
   history: Payout[];
+}
+
+// What Siyangena itself has earned: its commission on every promoter's events.
+export interface PlatformRevenue {
+  feePct: number;
+  feesZar: string; // commission on ticket sales and resale fees
+  ticketSalesZar: string;
+  resaleFeesZar: string;
+  paidOutZar: string;
 }
