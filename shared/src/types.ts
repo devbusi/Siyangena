@@ -70,6 +70,18 @@ export interface Drop {
   posterUrl?: string;
   promoterId?: string;
   promoterName?: string;
+  // Set when the promoter cancels: what fans are told, and how the refunds are going.
+  cancel?: CancelProgress;
+}
+
+export interface CancelProgress {
+  reason: string;
+  at: string;
+  holders: number;
+  refunded: number;
+  totalZar: string;
+  refundedZar: string;
+  done: boolean;
 }
 
 export interface CreateDropRequest {
@@ -289,6 +301,7 @@ export interface AgentLogEntry extends AgentLogRequest {
 export type DropEventType =
   | "drop.opened"
   | "drop.sold_out"
+  | "drop.cancelled"
   | "sale.intent"
   | "sale.paid"
   | "sale.ticket_sent"
@@ -357,4 +370,94 @@ export interface AdminUser {
   role: Role;
   verified: boolean;
   createdAt: string;
+}
+
+
+// ---- Wishlist, alerts, door, payouts ----
+
+export interface Wish {
+  id: string;
+  query: string;
+  city?: string;
+  maxZar?: string;
+  createdAt: string;
+  matches: number; // events on Siyangena that match right now
+}
+
+export type AlertKind = "new_event" | "sale_open" | "resale" | "tickets" | "sold" | "limit" | "cancelled";
+
+export interface AlertItem {
+  id: string;
+  kind: AlertKind;
+  title: string;
+  body: string;
+  eventId?: string;
+  at: string;
+  read: boolean;
+}
+
+// What fans on Siyangena are asking for, for promoters planning an event.
+export interface Demand {
+  matching: number; // fans whose wish matches the event being planned
+  top: { query: string; city?: string; fans: number }[];
+}
+
+export interface CheckinResult {
+  ok: boolean;
+  reason?: "used" | "no_ticket" | "wrong_event" | "expired" | "cancelled" | "bad_code";
+  message: string;
+  fanName?: string;
+  ticket?: number; // which of their tickets this was
+  of?: number;
+  at?: string;
+}
+
+export interface DoorStats {
+  checkedIn: number;
+  sold: number;
+  turnedAway: number;
+}
+
+export interface TicketPass {
+  code: string;
+  expiresAt: string;
+}
+
+export type PayoutStatus = "requested" | "paid";
+
+export interface Payout {
+  id: string;
+  promoterId: string;
+  promoterName?: string;
+  amountZar: string;
+  status: PayoutStatus;
+  bank?: string;
+  createdAt: string;
+  paidAt?: string;
+}
+
+export interface PayoutEventLine {
+  eventId: string;
+  name: string;
+  startsAt: string;
+  state: DropState;
+  salesZar: string;
+  feesZar: string;
+  refundedZar: string;
+  held: boolean; // independent promoters are paid the morning after the event
+}
+
+export interface PayoutSummary {
+  earnedZar: string; // ticket sales + resale fees - refunds
+  feesZar: string;
+  resales: number;
+  heldZar: string;
+  paidZar: string;
+  requestedZar: string;
+  availableZar: string;
+  refundedZar: string;
+  kind: "business" | "independent";
+  bank?: string;
+  events: PayoutEventLine[];
+  history: Payout[];
 }

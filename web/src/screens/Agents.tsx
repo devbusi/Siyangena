@@ -55,7 +55,9 @@ export function Agents() {
         <div className="stack" style={{ gap: 14 }}>
           {agents.map((a) => {
             const s = statusOf(a);
-            const left = Math.max(0, a.mandate.quantity - a.mandate.bought);
+            const left = a.mandate.status === "filled" ? 0 : Math.max(0, a.mandate.quantity - a.mandate.bought);
+            // Limits only matter while the event can still sell.
+            const open = a.eventState === "scheduled" || a.eventState === "open";
             return (
               <Enter key={a.eventId}>
                 <div className="panel stack" style={{ gap: 10 }}>
@@ -75,12 +77,22 @@ export function Agents() {
                     {left > 0 ? ` ${left} still to get.` : ""}
                   </p>
                   <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                    <Button className="btn-sm" onClick={() => navigate(`/events/${a.eventId}/live`)}>
-                      Watch my agent
-                    </Button>
-                    <Button variant="ghost" className="btn-sm" onClick={() => navigate(`/events/${a.eventId}/agent`)}>
-                      Change limits
-                    </Button>
+                    {left === 0 ? (
+                      <Button className="btn-sm" onClick={() => navigate("/tickets")}>
+                        See my tickets
+                      </Button>
+                    ) : (
+                      <>
+                        <Button className="btn-sm" onClick={() => navigate(`/events/${a.eventId}/live`)}>
+                          Watch my agent
+                        </Button>
+                        {open && (
+                          <Button variant="ghost" className="btn-sm" onClick={() => navigate(`/events/${a.eventId}/agent`)}>
+                            Change limits
+                          </Button>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               </Enter>

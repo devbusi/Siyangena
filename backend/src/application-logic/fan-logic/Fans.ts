@@ -66,6 +66,20 @@ export class Fans {
     return { id: fanId, name: profile?.fullName || "Fan", main: null, agent: wallet, custodial: true };
   }
 
+  // Every fan with a wallet: the demo cast and signed-up accounts.
+  allContexts(): FanContext[] {
+    const list: FanContext[] = [];
+    for (const def of CAST) {
+      const ctx = this.castContext(def);
+      if (ctx) list.push(ctx);
+    }
+    for (const id of accounts.userIds()) {
+      const ctx = this.findContext(id);
+      if (ctx) list.push(ctx);
+    }
+    return list;
+  }
+
   getContext(fanId: string): FanContext {
     const ctx = this.findContext(fanId);
     if (!ctx) {
@@ -210,7 +224,8 @@ export class Fans {
 
   async getTickets(fanId: string, eventId?: string): Promise<FanTickets> {
     const ctx = this.getContext(fanId);
-    const drops = Object.values(state.drops).filter((d) => d.issuanceId);
+    // Cancelled events were refunded, so their tickets no longer show.
+    const drops = Object.values(state.drops).filter((d) => d.issuanceId && d.state !== "cancelled");
     const counts = await Promise.all(
       drops.map(async (d) => ({
         eventId: d.id,

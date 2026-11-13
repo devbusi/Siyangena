@@ -28,3 +28,18 @@ export const MeAgentDto = z.object({
   goal: z.enum(["buy", "resale", "sell"]),
   priceZar: z.coerce.number().positive().optional(),
 });
+
+export const WishDto = z.object({
+  query: z.string().trim().min(2).max(120),
+  city: z.string().trim().max(60).optional(),
+  maxZar: z.coerce.number().positive().max(100000).optional(),
+});
+export type WishDto = z.infer<typeof WishDto>;
+
+export const CancelDto = z.object({
+  reason: z.string().trim().min(5).max(400),
+  confirm: z.literal("CANCEL"),
+});
+export type CancelDto = z.infer<typeof CancelDto>;
+
+export const CheckinDto = z.object({ code: z.string().trim().min(10).max(400) });

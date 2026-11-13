@@ -5,6 +5,9 @@ import { ReviewDto, RoleDto } from "../../../dto/account.dto";
 import { validate } from "../../../middleware/validate";
 import { forgetUser, requireRole } from "../../../middleware/auth";
 import { sendError } from "../../../lib/utils/errors";
+import { Payouts } from "../../../application-logic/payout-logic/Payouts";
+
+const payouts = new Payouts();
 
 // Siyangena admins: review promoter applications and manage roles.
 const router = Router();
@@ -47,6 +50,22 @@ router.post("/users/:userId/role", validate(RoleDto), async (req: Request, res: 
     res.json({ success: true, data: { userId: req.params.userId, role: req.body.role } });
   } catch (error) {
     sendError(res, error, "Failed to change role");
+  }
+});
+
+router.get("/payouts", async (_req: Request, res: Response) => {
+  try {
+    res.json({ success: true, data: payouts.all() });
+  } catch (error) {
+    sendError(res, error, "Failed to load payouts");
+  }
+});
+
+router.post("/payouts/:payoutId/paid", async (req: Request, res: Response) => {
+  try {
+    res.json({ success: true, data: payouts.markPaid(req.params.payoutId as string) });
+  } catch (error) {
+    sendError(res, error, "Failed to mark the payout paid");
   }
 });
 

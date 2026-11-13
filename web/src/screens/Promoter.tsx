@@ -14,7 +14,7 @@ import { useEvent } from "./EventPage";
 import { EventArt, salePill } from "./FanHome";
 import { dateLong } from "../lib/format";
 import { SA_PLACES } from "../lib/places";
-import type { Drop } from "@drop/shared";
+import type { Demand, Drop } from "@drop/shared";
 
 const toZar = (units: string | number) => Number(units) * ACTIVE.fxZarPerUnit;
 
@@ -54,6 +54,14 @@ export function PromoterDesk() {
   }, [drop?.id, drop?.resaleCapZar, drop?.resaleFeePct, drop?.maxPerFan]);
 
   const open = drop?.state === "open";
+  const cancelled = drop?.state === "cancelled";
+  const refunding = cancelled && drop?.cancel && !drop.cancel.done;
+  // Refunds run in the background: keep the progress moving.
+  useEffect(() => {
+    if (!refunding) return;
+    const t = setInterval(refreshDrop, 2000);
+    return () => clearInterval(t);
+  }, [refunding]); // eslint-disable-line react-hooks/exhaustive-deps
   const { me } = useAuth();
   // Admins can look, but only the promoter who owns the event can change it.
   const owner = Boolean(drop && me && drop.promoterId === me.id);
@@ -94,16 +102,19 @@ export function PromoterDesk() {
           <Enter>
             <div className="row" style={{ flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
               <div>
-                <span className={`pill ${open ? "pill-live" : drop.state === "sold_out" ? "pill-ok" : ""}`}>
-                  {open ? "On sale" : drop.state === "sold_out" ? "Sold out" : drop.state === "closed" ? "Sales closed" : "Not on sale yet"}
+                <span className={`pill ${open ? "pill-live" : drop.state === "sold_out" ? "pill-ok" : ""}`} style={cancelled ? { background: "var(--coral)" } : undefined}>
+                  {cancelled ? "Cancelled" : open ? "On sale" : drop.state === "sold_out" ? "Sold out" : drop.state === "closed" ? "Sales closed" : "Not on sale yet"}
                 </span>
                 <h1 style={{ marginTop: 10, fontSize: "clamp(2.6rem, 6vw, 4.2rem)" }}>{drop.name}</h1>
                 <p className="hero-meta">{drop.venue}</p>
               </div>
-              {owner ? (
-              <div className="row" style={{ gap: 8 }}>
-                <Button variant="ghost" onClick={() => navigate("/promoter/create")}>
-                  New event
+              {owner && cancelled ? null : owner ? (
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <Button variant="ghost" onClick={() => navigate(`/promoter/events/${id}/door`)}>
+                  Door scanner
+                </Button>
+                <Button variant="ghost" onClick={() => navigate(`/promoter/events/${id}/cancel`)}>
+                  Cancel event
                 </Button>
                 {open ? (
                   <Button variant="ghost" disabled={busy} onClick={() => run(() => api.closeSales(id!))}>
@@ -119,6 +130,20 @@ export function PromoterDesk() {
                 <span className="pill">View only</span>
               )}
             </div>
+            {cancelled && drop.cancel && (
+              <div className="panel stack" style={{ marginTop: 12, background: "#8ec5ff", gap: 8 }}>
+                <p style={{ fontWeight: 800 }}>{drop.cancel.done ? "Everyone's been refunded" : "Refunding fans"}</p>
+                <p className="stat-value num">
+                  {drop.cancel.refunded} of {drop.cancel.holders}
+                </p>
+                <div className="meter" aria-hidden="true">
+                  <motion.div initial={false} animate={{ width: `${drop.cancel.holders ? (drop.cancel.refunded / drop.cancel.holders) * 100 : 100}%` }} />
+                </div>
+                <p>
+                  {rand(drop.cancel.refundedZar)} of {rand(drop.cancel.totalZar)} back with fans. They were told: "{drop.cancel.reason}"
+                </p>
+              </div>
+            )}
             {!owner && (
               <p className="callout" style={{ marginTop: 12 }}>
                 You're seeing this as an admin. Only {drop.promoterName ?? "the promoter"} can open sales or change these rules.
@@ -545,6 +570,17 @@ export function CreateEvent() {
   const [error, setError] = useState("");
 
   const p = Number(price) || 0;
+  const [demand, setDemand] = useState<Demand | null>(null);
+  // How many fans on Siyangena want an event like this one, as it's being typed.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      api
+        .demand({ name, city, scene: poster ? undefined : scene, priceZar: p || undefined })
+        .then(setDemand)
+        .catch(() => setDemand(null));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [name, city, scene, poster, p]);
   const mult = CAP_PRESETS.find((c) => c.id === preset)!.mult;
   const cap = preset === "custom" ? Number(customCap) || 0 : Math.round(p * mult);
 
@@ -697,6 +733,31 @@ export function CreateEvent() {
         </form>
       </Enter>
       <aside className="desk-aside stack">
+        <div className="panel stack" style={{ background: "var(--lilac)", gap: 8 }}>
+          <p style={{ fontWeight: 800 }}>Fans waiting for this</p>
+          <p className="stat-value num" style={{ fontSize: "3.2rem" }}>
+            {demand?.matching ?? 0}
+          </p>
+          <p>
+            {demand?.matching
+              ? `${demand.matching === 1 ? "fan has" : "fans have"} a wish that fits this event. They get an alert the moment you create it.`
+              : "Fans with a matching wish get an alert the moment you create it."}
+          </p>
+          {demand && demand.top.length > 0 && (
+            <div className="stack" style={{ gap: 4, marginTop: 4 }}>
+              <p style={{ fontWeight: 800 }}>Most asked for{city ? ` in ${city}` : ""}</p>
+              {demand.top.map((t) => (
+                <div key={`${t.query}-${t.city ?? ""}`} className="row">
+                  <span>
+                    {t.query}
+                    {t.city ? `, ${t.city}` : ""}
+                  </span>
+                  <strong className="num">{t.fans}</strong>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <p style={{ fontWeight: 800 }}>How fans will see it</p>
         <div className="event-card">
           <div className="event-art">

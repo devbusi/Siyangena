@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import type { Drop, FanTickets, FanWallet } from "@drop/shared";
 import { Button, Enter, Marquee, Ticket, TopBar } from "../components/ui";
 import { CityArt, SCENES, type Scene } from "../components/CityArt";
+import { DoorPass } from "../components/DoorPass";
 import { api } from "../lib/api";
 import { dateLong, rand, time } from "../lib/format";
 import { useApp } from "../lib/store";
@@ -23,6 +24,8 @@ export function salePill(drop: Drop): { label: string; tone: string } {
       return { label: "Resale only", tone: "pill-quiet" };
     case "closed":
       return { label: "Sales closed", tone: "pill-quiet" };
+    case "cancelled":
+      return { label: "Cancelled", tone: "pill-quiet" };
     default:
       return { label: "On sale soon", tone: "pill-quiet" };
   }
@@ -113,6 +116,7 @@ export function Tickets() {
   const navigate = useNavigate();
   const [data, setData] = useState<FanTickets | null>(null);
   const [gifting, setGifting] = useState(false);
+  const [showing, setShowing] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     api.tickets().then(setData).catch(() => setData({ count: 0, history: [], events: [] }));
@@ -148,6 +152,9 @@ export function Tickets() {
                   style={{ gap: 10 }}
                 >
                   <Ticket name={e.name} line={`${e.venue}, ${dateLong(e.startsAt)}`} label={`Ticket ${i + 1} of ${e.count}`} />
+                  <Button className="btn-sm" block onClick={() => setShowing({ id: e.eventId, name: e.name })}>
+                    Show at the door
+                  </Button>
                   <div className="row" style={{ gap: 8 }}>
                     <Button variant="ghost" className="btn-sm" style={{ flex: 1 }} onClick={() => setGifting(true)}>
                       Send to a friend
@@ -165,6 +172,7 @@ export function Tickets() {
           </div>
         )}
       </div>
+      <AnimatePresence>{showing && <DoorPass eventId={showing.id} name={showing.name} onClose={() => setShowing(null)} />}</AnimatePresence>
       <AnimatePresence>
         {gifting && (
           <motion.div className="scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setGifting(false)}>
@@ -288,60 +296,6 @@ export function WalletScreen() {
             )}
           </div>
         </Enter>
-      </div>
-    </>
-  );
-}
-
-export function Wishlist() {
-  const wishes = [
-    { name: "International headliner, Cape Town", state: "Bought", tone: "pill-ok", note: "2 tickets at R1,200, the second they went on sale." },
-    { name: "Amapiano nights, Joburg", state: "Watching", tone: "pill-quiet", note: "Your agent buys on Siyangena and partner sites." },
-    { name: "Festival weekend, Durban", state: "Found", tone: "pill-live", note: "On sale on a site that doesn't work with agents yet. You're first to know, so you can buy it yourself." },
-  ];
-  return (
-    <>
-      <div className="phone">
-        <TopBar />
-        <Enter>
-          <h1 style={{ margin: "10px 0 8px" }}>Who do you want to see?</h1>
-          <p className="muted">Your agent watches for new events and buys within your limits.</p>
-        </Enter>
-        <Enter delay={0.06}>
-          <form className="panel stack" style={{ marginTop: 18 }} onSubmit={(e) => e.preventDefault()}>
-            <div className="field">
-              <label htmlFor="wish">Artist, event or vibe</label>
-              <input id="wish" className="input" placeholder="Amapiano nights in Joburg" />
-            </div>
-            <div className="row" style={{ gap: 10 }}>
-              <div className="field" style={{ flex: 1 }}>
-                <label htmlFor="wmax">Max per ticket</label>
-                <input id="wmax" className="input" defaultValue="R1,500" />
-              </div>
-              <div className="field" style={{ flex: 1 }}>
-                <label htmlFor="wcity">City</label>
-                <input id="wcity" className="input" defaultValue="Anywhere" />
-              </div>
-            </div>
-            <Button type="submit" block>
-              Add to wishlist
-            </Button>
-          </form>
-        </Enter>
-        <div className="stack" style={{ marginTop: 18 }}>
-          {wishes.map((w) => (
-            <div key={w.name} className="panel stack" style={{ gap: 6 }}>
-              <div className="row">
-                <strong>{w.name}</strong>
-                <span className={`pill ${w.tone}`}>{w.state}</span>
-              </div>
-              <p className="muted">{w.note}</p>
-            </div>
-          ))}
-          <p className="faint" style={{ textAlign: "center" }}>
-            Your agent only buys where the seller allows it. Everywhere else, it tells you first.
-          </p>
-        </div>
       </div>
     </>
   );

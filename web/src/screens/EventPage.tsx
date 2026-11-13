@@ -189,6 +189,17 @@ export function EventPage() {
       </div>
 
       <div className="bottom-bar">
+        {drop.state === "cancelled" ? (
+          <div className="bottom-bar-inner stack panel" style={{ gap: 8, background: "var(--coral-wash)" }}>
+            <p style={{ fontWeight: 800 }}>This event was cancelled. {drop.cancel?.reason}</p>
+            <p className="muted">Everyone with a ticket is refunded to their Siyangena wallet automatically.</p>
+            {signedIn && (
+              <Button variant="ghost" block onClick={() => navigate("/wallet")}>
+                See my wallet
+              </Button>
+            )}
+          </div>
+        ) : (
         <div className="bottom-bar-inner stack" style={{ gap: 8 }}>
           {!soldOut && drop.state !== "closed" && (
             <Button block onClick={() => go(`/events/${drop.id}/buy`)}>
@@ -205,6 +216,7 @@ export function EventPage() {
             </Button>
           )}
         </div>
+        )}
       </div>
     </>
   );

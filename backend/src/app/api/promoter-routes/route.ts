@@ -2,6 +2,11 @@ import { Router, Request, Response } from "express";
 import { Drop } from "../../../application-logic/drop-logic/Drop";
 import { accounts } from "../../../application-logic/account-logic/Accounts";
 import { CreateDropDto, UpdateDropDto } from "../../../dto/drop.dto";
+import { CancelDto, CheckinDto } from "../../../dto/account.dto";
+import { alerts } from "../../../application-logic/alert-logic/Alerts";
+import { cancelEvent, cancelPreview } from "../../../application-logic/drop-logic/Cancel";
+import { Door } from "../../../application-logic/door-logic/Door";
+import { Payouts } from "../../../application-logic/payout-logic/Payouts";
 import { validate } from "../../../middleware/validate";
 import { requireRole } from "../../../middleware/auth";
 import { ApiError, sendError } from "../../../lib/utils/errors";
@@ -9,6 +14,8 @@ import { supabaseConfigured } from "../../../lib/supabase";
 
 const router = Router();
 const dropService = new Drop();
+const door = new Door();
+const payouts = new Payouts();
 
 // Every promoter route needs a promoter (or admin) account. Creating and opening sales
 // also need an approved application.
@@ -37,7 +44,7 @@ async function assertApproved(w: Who) {
 router.get("/events", async (req: Request, res: Response) => {
   try {
     const w = who(req);
-    res.json({ success: true, data: dropService.list(w.isAdmin ? undefined : { promoterId: w.id }) });
+    res.json({ success: true, data: dropService.list(w.isAdmin ? { includeCancelled: true } : { promoterId: w.id, includeCancelled: true }) });
   } catch (error) {
     sendError(res, error, "Failed to load your events");
   }
@@ -91,6 +98,79 @@ router.get("/events/:eventId/stats", async (req: Request, res: Response) => {
     res.json({ success: true, data: dropService.getStats(req.params.eventId as string) });
   } catch (error) {
     sendError(res, error, "Failed to fetch stats");
+  }
+});
+
+// What fans are asking for, so promoters can see demand before they list.
+router.get("/demand", async (req: Request, res: Response) => {
+  try {
+    const q = (k: string) => (typeof req.query[k] === "string" ? (req.query[k] as string) : undefined);
+    const price = Number(q("priceZar"));
+    res.json({
+      success: true,
+      data: alerts.demand({ name: q("name"), city: q("city"), scene: q("scene"), ...(price > 0 ? { priceZar: price } : {}) }),
+    });
+  } catch (error) {
+    sendError(res, error, "Failed to load demand");
+  }
+});
+
+// ---- Cancel ----
+
+router.get("/events/:eventId/cancel-preview", async (req: Request, res: Response) => {
+  try {
+    assertCanManage(req.params.eventId as string, who(req));
+    res.json({ success: true, data: await cancelPreview(req.params.eventId as string) });
+  } catch (error) {
+    sendError(res, error, "Failed to work out refunds");
+  }
+});
+
+router.post("/events/:eventId/cancel", validate(CancelDto), async (req: Request, res: Response) => {
+  try {
+    assertCanManage(req.params.eventId as string, who(req));
+    res.json({ success: true, data: await cancelEvent(req.params.eventId as string, (req.body as CancelDto).reason) });
+  } catch (error) {
+    sendError(res, error, "Failed to cancel the event");
+  }
+});
+
+// ---- Door ----
+
+router.post("/events/:eventId/checkin", validate(CheckinDto), async (req: Request, res: Response) => {
+  try {
+    assertCanManage(req.params.eventId as string, who(req));
+    res.json({ success: true, data: await door.checkIn(req.params.eventId as string, req.body.code) });
+  } catch (error) {
+    sendError(res, error, "Failed to check the ticket");
+  }
+});
+
+router.get("/events/:eventId/door", async (req: Request, res: Response) => {
+  try {
+    assertCanManage(req.params.eventId as string, who(req));
+    res.json({ success: true, data: door.stats(req.params.eventId as string) });
+  } catch (error) {
+    sendError(res, error, "Failed to load door numbers");
+  }
+});
+
+// ---- Payouts ----
+
+router.get("/payouts", async (req: Request, res: Response) => {
+  try {
+    res.json({ success: true, data: await payouts.summary(who(req).id) });
+  } catch (error) {
+    sendError(res, error, "Failed to load payouts");
+  }
+});
+
+router.post("/payouts/request", async (req: Request, res: Response) => {
+  try {
+    const w = who(req);
+    res.status(201).json({ success: true, data: await payouts.request(w.id, w.name) });
+  } catch (error) {
+    sendError(res, error, "Failed to request a payout");
   }
 });
 

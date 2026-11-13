@@ -1,6 +1,9 @@
 // Simulated backend for previews (VITE_MOCK=1). Same shapes as the real API, all in memory.
 import type {
   AdminUser,
+  AlertItem,
+  Payout,
+  Wish,
   Drop,
   DropEvent,
   DropEventType,
@@ -11,6 +14,7 @@ import type {
   Role,
 } from "@drop/shared";
 import type { Api, AgentGoal } from "./api";
+import { rand } from "./format";
 
 const FX = 18;
 const listeners = new Set<(e: DropEvent) => void>();
@@ -112,11 +116,36 @@ const applications: Record<string, PromoterApplication> = {
   u_zama: { userId: "u_zama", kind: "independent", displayName: "Zama Gqom Sundays", pastEvents: "Two pop-ups in Umlazi", socials: "@zamagqom", payoutDetails: "Capitec, Z Dlamini", status: "pending", createdAt: "2026-11-13T19:05:00Z", email: "zama@example.com" },
 };
 const purchases: Record<string, string> = {};
+const wishes: (Wish & { fanId: string })[] = [
+  { id: "wish_seed1", fanId: "u_seed1", query: "Amapiano", city: "Cape Town", maxZar: "1500", createdAt: "2026-11-10T10:00:00Z", matches: 0 },
+  { id: "wish_seed2", fanId: "u_seed2", query: "Sunset sessions", city: "Cape Town", createdAt: "2026-11-11T10:00:00Z", matches: 0 },
+  { id: "wish_seed3", fanId: "u_seed3", query: "Rooftop", city: "Johannesburg", maxZar: "400", createdAt: "2026-11-12T10:00:00Z", matches: 0 },
+];
+const alertsBy: Record<string, AlertItem[]> = {};
+const checkins: Record<string, Record<string, number>> = {};
+const turned: Record<string, number> = {};
+const payoutList: Payout[] = [];
+
+function pushAlert(fanId: string, a: Omit<AlertItem, "id" | "at" | "read">) {
+  (alertsBy[fanId] ??= []).push({ ...a, id: `alert_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, at: new Date().toISOString(), read: false });
+}
+
+function wishFits(w: { query: string; city?: string; maxZar?: string }, d: Drop) {
+  const city = (w.city ?? "").toLowerCase();
+  if (city && city !== "anywhere" && !`${d.city} ${d.venue}`.toLowerCase().includes(city)) return false;
+  if (w.maxZar && Number(d.priceZar) > Number(w.maxZar)) return false;
+  const words = w.query.toLowerCase().split(/\s+/).filter((x) => x.length > 2);
+  const hay = `${d.name} ${d.venue} ${d.scene ?? ""} ${d.promoterName ?? ""}`.toLowerCase();
+  return words.length === 0 ? Boolean(city) : words.some((x) => hay.includes(x));
+}
 
 function emit(type: DropEventType, extra: Partial<DropEvent> = {}) {
   const receipt = ["sale.paid", "sale.ticket_sent", "resale.settled"].includes(type) ? { explorerUrl: "#receipt" } : {};
   const event: DropEvent = { type, at: new Date().toISOString(), message: type, ...receipt, ...extra };
   history.push(event);
+  if (type === "sale.ticket_sent" && extra.fanId) {
+    pushAlert(extra.fanId, { kind: "tickets", title: "Your tickets are in", body: `${drops.find((d) => d.id === extra.eventId)?.name ?? "Your event"}. They're in your wallet, ready for the door.`, eventId: extra.eventId });
+  }
   listeners.forEach((l) => l(event));
 }
 
@@ -245,7 +274,7 @@ export const mockApi: Api = {
   tickets: async (eventId) => {
     const a = acct(who().id);
     const held = Object.entries(a.tickets)
-      .filter(([, c]) => c > 0)
+      .filter(([id, c]) => c > 0 && drop(id).state !== "cancelled")
       .map(([id, count]) => {
         const d = drop(id);
         return { eventId: id, name: d.name, venue: d.venue, startsAt: d.startsAt, count };
@@ -327,6 +356,36 @@ export const mockApi: Api = {
     emit("resale.settled", { fanId: u.id, eventId: l.eventId });
     return { status: "settled" };
   },
+  wishes: async () =>
+    wishes
+      .filter((w) => w.fanId === who().id)
+      .map(({ fanId: _f, ...w }) => ({ ...w, matches: drops.filter((d) => (d.state === "open" || d.state === "scheduled") && wishFits(w, d)).length })),
+  addWish: async (body) => {
+    const w = { id: `wish_${Date.now()}`, fanId: who().id, query: body.query, ...(body.city ? { city: body.city } : {}), ...(body.maxZar ? { maxZar: String(body.maxZar) } : {}), createdAt: new Date().toISOString(), matches: 0 };
+    wishes.push(w);
+    for (const d of drops) {
+      if ((d.state === "open" || d.state === "scheduled") && wishFits(w, d)) {
+        w.matches += 1;
+        pushAlert(w.fanId, { kind: "new_event", title: `Already on Siyangena: ${d.name}`, body: `${d.city ?? d.venue}, from ${rand(d.priceZar)}. ${d.state === "open" ? "On sale now." : "Sales open soon."}`, eventId: d.id });
+      }
+    }
+    emit("agent.action", { fanId: w.fanId, detail: "wish saved" });
+    const { fanId: _f, ...view } = w;
+    return view;
+  },
+  removeWish: async (id) => {
+    const i = wishes.findIndex((w) => w.id === id && w.fanId === who().id);
+    if (i >= 0) wishes.splice(i, 1);
+  },
+  alerts: async () => [...(alertsBy[who().id] ?? [])].reverse(),
+  readAlerts: async () => {
+    for (const a of alertsBy[who().id] ?? []) a.read = true;
+  },
+  ticketPass: async (eventId) => {
+    if ((acct(who().id).tickets[eventId] ?? 0) < 1) throw new Error("You don't hold a ticket for this event");
+    const exp = Date.now() + 60_000;
+    return { code: `S1.${eventId}.${who().id}.${exp}.${"m".repeat(22)}`, expiresAt: new Date(exp).toISOString() };
+  },
   myEvents: async () => {
     const u = who();
     return drops.filter((d) => u.role === "admin" || d.promoterId === u.id).map((d) => ({ ...d }));
@@ -369,6 +428,119 @@ export const mockApi: Api = {
     return { ...d };
   },
   stats: async (id) => ({ sold: drop(id).sold, ...statsFor(id) }),
+  demand: async (plan) => {
+    const fake = base({ id: "plan", name: plan.name ?? "", venue: plan.city ?? "", city: plan.city, scene: plan.scene, startsAt: "", priceZar: String(plan.priceZar ?? 0) });
+    const matching = plan.name || plan.city ? new Set(wishes.filter((w) => wishFits(w, fake)).map((w) => w.fanId)).size : 0;
+    const groups = new Map<string, { query: string; city?: string; fans: Set<string> }>();
+    for (const w of wishes) {
+      if (plan.city && w.city && w.city.toLowerCase() !== plan.city.toLowerCase()) continue;
+      const k = `${w.query.toLowerCase()}|${(w.city ?? "").toLowerCase()}`;
+      const g = groups.get(k) ?? { query: w.query, ...(w.city ? { city: w.city } : {}), fans: new Set<string>() };
+      g.fans.add(w.fanId);
+      groups.set(k, g);
+    }
+    const top = [...groups.values()].map((g) => ({ query: g.query, ...(g.city ? { city: g.city } : {}), fans: g.fans.size })).sort((a, b) => b.fans - a.fans).slice(0, 5);
+    return { matching, top };
+  },
+  cancelPreview: async (id) => {
+    const d = drop(id);
+    const holders = Object.values(accounts).filter((a) => (a.tickets[id] ?? 0) > 0);
+    const tickets = holders.reduce((n, a) => n + (a.tickets[id] ?? 0), 0);
+    const total = tickets * Number(d.priceZar);
+    return { holders: holders.length, tickets, faceZar: String(total), resaleExtraZar: "0", totalZar: String(total) };
+  },
+  cancelEvent: async (id, reason) => {
+    const d = drop(id);
+    if (d.promoterId !== who().id) throw new Error("This isn't your event");
+    const holders = Object.entries(accounts).filter(([, a]) => (a.tickets[id] ?? 0) > 0);
+    const total = holders.reduce((n, [, a]) => n + (a.tickets[id] ?? 0) * Number(d.priceZar), 0);
+    d.state = "cancelled";
+    d.cancel = { reason, at: new Date().toISOString(), holders: holders.length, refunded: 0, totalZar: String(total), refundedZar: "0", done: holders.length === 0 };
+    (async () => {
+      for (const [fanId, a] of holders) {
+        await wait(700);
+        const back = (a.tickets[id] ?? 0) * Number(d.priceZar);
+        a.allowance += back;
+        d.cancel!.refunded += 1;
+        d.cancel!.refundedZar = String(Number(d.cancel!.refundedZar) + back);
+        pushAlert(fanId, { kind: "cancelled", title: `${d.name} is cancelled`, body: `${reason} ${rand(back)} is back in your wallet.`, eventId: id });
+        emit("drop.cancelled", { eventId: id });
+      }
+      d.cancel!.done = true;
+      emit("drop.cancelled", { eventId: id });
+    })();
+    return { ...d };
+  },
+  checkIn: async (id, code) => {
+    const d = drop(id);
+    const parts = code.trim().split(".");
+    const bad = (reason: "bad_code" | "wrong_event" | "cancelled" | "expired" | "used" | "no_ticket", message: string) => {
+      turned[id] = (turned[id] ?? 0) + 1;
+      return { ok: false, reason, message };
+    };
+    if (parts.length !== 5 || parts[0] !== "S1") return bad("bad_code", "That isn't a Siyangena ticket");
+    if (parts[1] !== id) return bad("wrong_event", "This ticket is for a different event");
+    if (d.state === "cancelled") return bad("cancelled", "This event was cancelled and refunded");
+    if (Number(parts[3]) < Date.now()) return bad("expired", "Old code, likely a screenshot. Ask them to open the ticket in the app.");
+    const held = acct(parts[2]).tickets[id] ?? 0;
+    const name = PEOPLE[parts[2]]?.fullName ?? "Fan";
+    if (held < 1) return bad("no_ticket", "This wallet holds no ticket for this event");
+    const used = ((checkins[id] ??= {})[parts[2]] ??= 0);
+    if (used >= held) return { ...bad("used", "Already used. Scanned earlier tonight."), fanName: name, of: held };
+    checkins[id][parts[2]] = used + 1;
+    return { ok: true, message: "Let them in", fanName: name, ticket: used + 1, of: held, at: new Date().toISOString() };
+  },
+  doorStats: async (id) => ({
+    checkedIn: Object.values(checkins[id] ?? {}).reduce((a, b) => a + b, 0),
+    sold: drop(id).sold,
+    turnedAway: turned[id] ?? 0,
+  }),
+  payouts: async () => {
+    const u = who();
+    const mine = drops.filter((d) => d.promoterId === u.id);
+    const lines = mine.map((d) => {
+      const st = statsFor(d.id);
+      const sales = Number(st.revenueRlusd) * FX;
+      const fees = Number(st.feesRlusd) * FX;
+      const refunded = Number(d.cancel?.refundedZar ?? 0);
+      const held = applications[u.id]?.kind !== "business" && d.state !== "cancelled" && new Date(d.startsAt).getTime() + 864e5 > Date.now();
+      return { eventId: d.id, name: d.name, startsAt: d.startsAt, state: d.state, salesZar: sales.toFixed(2), feesZar: fees.toFixed(2), refundedZar: refunded.toFixed(2), held };
+    });
+    const net = (l: (typeof lines)[number]) => Math.max(0, Number(l.salesZar) + Number(l.feesZar) - Number(l.refundedZar));
+    const earned = lines.reduce((n, l) => n + net(l), 0);
+    const held = lines.filter((l) => l.held).reduce((n, l) => n + net(l), 0);
+    const history = payoutList.filter((p) => p.promoterId === u.id);
+    const paid = history.filter((p) => p.status === "paid").reduce((n, p) => n + Number(p.amountZar), 0);
+    const requested = history.filter((p) => p.status === "requested").reduce((n, p) => n + Number(p.amountZar), 0);
+    return {
+      earnedZar: earned.toFixed(2),
+      feesZar: lines.reduce((n, l) => n + Number(l.feesZar), 0).toFixed(2),
+      resales: mine.reduce((n, d) => n + statsFor(d.id).resales, 0),
+      heldZar: held.toFixed(2),
+      paidZar: paid.toFixed(2),
+      requestedZar: requested.toFixed(2),
+      availableZar: Math.max(0, earned - held - paid - requested).toFixed(2),
+      refundedZar: lines.reduce((n, l) => n + Number(l.refundedZar), 0).toFixed(2),
+      kind: applications[u.id]?.kind ?? "independent",
+      bank: "FNB, account ending 4417",
+      events: lines,
+      history,
+    };
+  },
+  requestPayout: async () => {
+    const s = await mockApi.payouts();
+    if (Number(s.availableZar) <= 0) throw new Error("Nothing to pay out yet");
+    const p: Payout = { id: `payout_${Date.now()}`, promoterId: who().id, promoterName: who().fullName, amountZar: s.availableZar, status: "requested", bank: s.bank, createdAt: new Date().toISOString() };
+    payoutList.unshift(p);
+    return p;
+  },
+  allPayouts: async () => payoutList,
+  markPayoutPaid: async (id) => {
+    const p = payoutList.find((x) => x.id === id)!;
+    p.status = "paid";
+    p.paidAt = new Date().toISOString();
+    return p;
+  },
   applications: async (status) => Object.values(applications).filter((a) => !status || a.status === status),
   review: async (userId, decision, note) => {
     const a = applications[userId];

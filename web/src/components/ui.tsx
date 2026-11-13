@@ -4,6 +4,8 @@ import { Link, NavLink, Navigate, useLocation, useNavigate } from "react-router-
 import { useAuth } from "../lib/auth";
 import { MOCK } from "../lib/config";
 import { mockAuth } from "../lib/mock";
+import { api } from "../lib/api";
+import { useApp } from "../lib/store";
 import type { Tone } from "../lib/format";
 
 const spring = { type: "spring" as const, stiffness: 520, damping: 22 };
@@ -192,7 +194,7 @@ export function navFor(role: string | undefined, signedIn: boolean): NavItem[] {
     return [
       { to: "/promoter", label: "Overview", end: true },
       { to: "/promoter/create", label: "New event" },
-      { to: "/events", label: "Browse", end: true },
+      { to: "/promoter/payouts", label: "Payouts" },
       { to: "/account", label: "Account" },
     ];
   if (signedIn)
@@ -232,15 +234,18 @@ function moreFor(role: string | undefined): NavItem[] {
   if (role === "admin")
     return [
       { to: "/admin/people", label: "People and roles" },
+      { to: "/admin/payouts", label: "Payouts" },
       { to: "/events", label: "Browse events as a fan" },
       { to: "/account", label: "My account" },
     ];
   if (role === "promoter")
     return [
       { to: "/promoter/apply", label: "My promoter details" },
+      { to: "/events", label: "Browse events as a fan" },
       { to: "/account", label: "My account" },
     ];
   return [
+    { to: "/alerts", label: "Alerts" },
     { to: "/wishlist", label: "Wishlist" },
     { to: "/verify?next=/account", label: "Verify my account" },
     { to: "/account", label: "My account" },
@@ -354,13 +359,38 @@ export function TopBar({ back }: { back?: string }) {
         ))}
       </nav>
       {signedIn ? (
-        <PlusMenu />
+        <div className="topbar-actions">
+          {me?.role === "fan" && <AlertBell />}
+          <PlusMenu />
+        </div>
       ) : (
         <Link to="/signin" className="btn btn-ghost btn-sm" style={{ minHeight: 44 }}>
           Sign in
         </Link>
       )}
     </header>
+  );
+}
+
+// Bell with the number of unread alerts. Refreshes when anything happens in the app.
+function AlertBell() {
+  const { tick } = useApp();
+  const [unread, setUnread] = useState(0);
+  const { pathname } = useLocation();
+  useEffect(() => {
+    api
+      .alerts()
+      .then((list) => setUnread(list.filter((a) => !a.read).length))
+      .catch(() => undefined);
+  }, [tick, pathname]);
+  return (
+    <Link to="/alerts" className="plus-btn bell-btn" aria-label={unread ? `Alerts, ${unread} new` : "Alerts"}>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z" />
+        <path d="M10 20a2 2 0 0 0 4 0" />
+      </svg>
+      {unread > 0 && pathname !== "/alerts" && <span className="bell-count">{unread > 9 ? "9+" : unread}</span>}
+    </Link>
   );
 }
 

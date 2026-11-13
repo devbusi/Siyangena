@@ -224,16 +224,18 @@ export function AdminOverview() {
   const navigate = useNavigate();
   const [pending, setPending] = useState<PromoterApplication[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [payoutsWaiting, setPayoutsWaiting] = useState(0);
   useEffect(() => {
     api.applications("pending").then(setPending).catch(() => undefined);
     api.users().then(setUsers).catch(() => undefined);
+    api.allPayouts().then((l) => setPayoutsWaiting(l.filter((p) => p.status === "requested").length)).catch(() => undefined);
   }, []);
   const onSale = drops.filter((d) => d.state === "open").length;
   const tiles = [
     { label: "Promoters waiting", value: pending.length, to: "/admin/review", bg: "var(--sun)", cta: "Review them" },
     { label: "People", value: users.length, to: "/admin/people", bg: "var(--mint)", cta: "See everyone" },
     { label: "Events", value: drops.length, to: "/admin/events", bg: "#8ec5ff", cta: `${onSale} on sale now` },
-    { label: "Verified fans", value: users.filter((u) => u.verified).length, to: "/admin/people", bg: "var(--lilac)", cta: "One person, one wallet" },
+    { label: "Payouts to make", value: payoutsWaiting, to: "/admin/payouts", bg: "var(--lilac)", cta: "Pay promoters" },
   ];
   return (
     <div className="desk">

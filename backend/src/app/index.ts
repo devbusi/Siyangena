@@ -13,6 +13,7 @@ import { identify } from "../middleware/auth";
 import { initStore } from "../lib/store";
 import { accounts } from "../application-logic/account-logic/Accounts";
 import { supabaseConfigured } from "../lib/supabase";
+import { alerts } from "../application-logic/alert-logic/Alerts";
 
 // server instance of the app
 const app = express();
@@ -62,6 +63,7 @@ async function boot() {
   await initStore();
   await accounts.init();
   new Drop().seedFromEnv();
+  alerts.start();
 }
 
 boot()

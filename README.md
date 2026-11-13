@@ -18,6 +18,14 @@ Bots buy out South African events in seconds and resell them at two or three tim
 
 The promoter decides the rules per event: supply, price, tickets per fan, resale cap and resale fee. They can change the per-fan limit, cap and fee from the control room.
 
+**Around the sale:**
+
+- **Wishlist and alerts.** Fans add who they want to see (artist, event or vibe, a city and a max price). They get an alert when a matching event is listed, when sales open, and when a resale ticket under their max comes up. Each alert has Buy tickets and Send my agent in right there. The agent only ever buys on Siyangena.
+- **Demand for promoters.** On New event, promoters see how many fans have a wish that fits what they're planning, and the most asked-for wishes in that city.
+- **Door scanner.** Each ticket shows a QR code that changes every minute. The promoter scans it at the door. The code is signed by the server and checked against the ledger, and each ticket a wallet holds lets one person in, so screenshots and copies don't get in.
+- **Cancel an event.** The promoter types CANCEL and a message for fans. Sales stop, every holder is refunded to their wallet from the platform wallet (face value, or what they paid on resale), and fans get an alert with the message.
+- **Payouts.** Promoters see ticket sales, resale fees, refunds, what's held and what's been paid. Registered businesses can be paid as tickets sell. Independent promoters are paid the morning after the event. They request a payout, and an admin pays it by bank transfer and marks it paid.
+
 ## What enforces what
 
 | Rule | Enforced by |
@@ -31,7 +39,7 @@ The promoter decides the rules per event: supply, price, tickets per fan, resale
 | Each agent only signs what it agreed to | The agent checks every inner transaction of the Batch before signing |
 | Tickets per fan | Service counts held and reserved tickets across primary sale and resale |
 
-Payments settle in RLUSD on Testnet (or XRP on Devnet). The app shows rands only, and the blockchain stays invisible to fans.
+Payments settle in RLUSD on Testnet (or XRP on Devnet). Set `SETTLE_ASSET=XRP` (and `VITE_SETTLE_ASSET=XRP` in `web/.env`) to pay in test XRP on Testnet when the RLUSD faucet isn't paying out. The app shows rands only, and the blockchain stays invisible to fans. `npm run bank` shows what the test bank wallet holds.
 
 ## Accounts and roles
 
@@ -41,7 +49,7 @@ Sign-up and sign-in use Supabase (email and password). Everyone gets a role:
 | --- | --- |
 | Fan | Every new account. Verify once, buy tickets, add an agent with limits, resell at the promoter's cap, top up test money |
 | Promoter | Apply as a registered business or an independent promoter. Once an admin approves, create events and run them: open and close sales, set tickets per fan, the resale cap and the fee, watch the live feed |
-| Admin | Review promoter applications (approve, ask for more, don't approve) and change anyone's role |
+| Admin | Review promoter applications (approve, ask for more, don't approve), change anyone's role, and mark promoter payouts paid. Admins can view any event but only its promoter can change it |
 
 Every account gets its own ticket wallet, created and funded by the server on Testnet the first time they sign in. The seed is encrypted with `WALLET_ENCRYPTION_KEY` before it is stored, and fans never see it. Buying directly needs no agent: the server pays from the fan's wallet. The agent is an add-on that the backend starts for one fan and one event, with that wallet only.
 
@@ -97,7 +105,7 @@ npm run demo
 
 ## SMS
 
-Fans get a text when their tickets arrive (with a link to show at the door), when their resale ticket sells, and when they get a resale ticket. For the MVP these are placeholders: the backend prints each message to its log. An SMS provider plugs into `backend/src/lib/sms.ts`.
+Every alert also goes out as a text. Fans get a text when their tickets arrive (with a link to show at the door), when their resale ticket sells, and when they get a resale ticket. For the MVP these are placeholders: the backend prints each message to its log. An SMS provider plugs into `backend/src/lib/sms.ts`.
 
 ## Deploy
 
@@ -109,8 +117,10 @@ Fans get a text when their tickets arrive (with a link to show at the door), whe
 1. Sign up as a promoter, fill in the application.
 2. As an admin, open Promoter review and approve it.
 3. As the promoter, create an event and open sales.
-4. Sign up as a fan, verify, add test money in Wallet, buy tickets.
+4. Sign up as a fan, verify, add test money in Wallet, add a wish, buy tickets.
 5. A second fan adds an agent with limits. A fan who can't go resells, and the other buys it.
+6. At the door, the promoter opens Door scanner and scans a fan's ticket from Tickets, Show at the door. Scan it again: Already used.
+7. The promoter requests a payout, and the admin marks it paid. Cancel a test event to see every fan refunded.
 
 ### Preview without a ledger
 

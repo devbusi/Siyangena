@@ -84,6 +84,11 @@ export class Accounts {
     console.log(`Loaded ${wallets.size} account wallet(s) and ${profiles.size} profile(s)`);
   }
 
+  // Everyone with a ticket wallet (for refunds when an event is cancelled).
+  userIds(): string[] {
+    return [...wallets.keys()];
+  }
+
   walletFor(userId: string): Wallet | null {
     return wallets.get(userId) ?? null;
   }

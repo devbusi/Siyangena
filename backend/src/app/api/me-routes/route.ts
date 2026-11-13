@@ -6,7 +6,9 @@ import { Sales } from "../../../application-logic/sale-logic/Sales";
 import { Resale } from "../../../application-logic/resale-logic/Resale";
 import { AgentRuns } from "../../../application-logic/agent-run-logic/AgentRuns";
 import { Drop } from "../../../application-logic/drop-logic/Drop";
-import { ApplicationDto, BuyDto, MeAgentDto, ResellDto, TopUpDto } from "../../../dto/account.dto";
+import { ApplicationDto, BuyDto, MeAgentDto, ResellDto, TopUpDto, WishDto } from "../../../dto/account.dto";
+import { alerts } from "../../../application-logic/alert-logic/Alerts";
+import { Door } from "../../../application-logic/door-logic/Door";
 import { PutMandateDto } from "../../../dto/fan.dto";
 import { validate } from "../../../middleware/validate";
 import { requireUser } from "../../../middleware/auth";
@@ -22,6 +24,7 @@ const saleService = new Sales();
 const resaleService = new Resale();
 const agentRuns = new AgentRuns();
 const dropService = new Drop();
+const door = new Door();
 
 router.use((req, res, next) => {
   if (!supabaseConfigured()) {
@@ -99,6 +102,59 @@ router.post("/promoter-application", validate(ApplicationDto), async (req: Reque
     res.json({ success: true, data: await accounts.submitApplication(me(req).id, req.body as ApplicationDto) });
   } catch (error) {
     sendError(res, error, "Failed to send your application");
+  }
+});
+
+// ---- Wishlist and alerts ----
+
+router.get("/wishes", async (req: Request, res: Response) => {
+  try {
+    res.json({ success: true, data: alerts.wishes(me(req).id) });
+  } catch (error) {
+    sendError(res, error, "Failed to load your wishlist");
+  }
+});
+
+router.post("/wishes", validate(WishDto), async (req: Request, res: Response) => {
+  try {
+    res.status(201).json({ success: true, data: alerts.addWish(me(req).id, req.body as WishDto) });
+  } catch (error) {
+    sendError(res, error, "Failed to save your wish");
+  }
+});
+
+router.delete("/wishes/:wishId", async (req: Request, res: Response) => {
+  try {
+    alerts.removeWish(me(req).id, req.params.wishId as string);
+    res.json({ success: true, data: { removed: req.params.wishId } });
+  } catch (error) {
+    sendError(res, error, "Failed to remove your wish");
+  }
+});
+
+router.get("/alerts", async (req: Request, res: Response) => {
+  try {
+    res.json({ success: true, data: alerts.list(me(req).id) });
+  } catch (error) {
+    sendError(res, error, "Failed to load your alerts");
+  }
+});
+
+router.post("/alerts/read", async (req: Request, res: Response) => {
+  try {
+    alerts.markRead(me(req).id);
+    res.json({ success: true, data: { read: true } });
+  } catch (error) {
+    sendError(res, error, "Failed to update your alerts");
+  }
+});
+
+// A fresh door code for the ticket QR (it changes every minute).
+router.get("/events/:eventId/pass", async (req: Request, res: Response) => {
+  try {
+    res.json({ success: true, data: await door.pass(me(req).id, req.params.eventId as string) });
+  } catch (error) {
+    sendError(res, error, "Failed to load your ticket code");
   }
 });
 

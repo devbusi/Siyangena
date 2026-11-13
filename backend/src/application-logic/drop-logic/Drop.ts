@@ -5,6 +5,7 @@ import { newId, nowIso } from "../../lib/utils/ids";
 import { zar, zarToSettle } from "../../lib/utils/money";
 import { xrplMpt } from "../../xrpl/xrpl.mpt";
 import { Events } from "../event-logic/Events";
+import { alerts } from "../alert-logic/Alerts";
 
 const events = new Events();
 
@@ -32,6 +33,7 @@ export class Drop {
       ...(record.posterUrl ? { posterUrl: record.posterUrl } : {}),
       ...(record.promoterId ? { promoterId: record.promoterId } : {}),
       ...(record.promoterName ? { promoterName: record.promoterName } : {}),
+      ...(record.cancel ? { cancel: record.cancel } : {}),
     };
   }
 
@@ -58,10 +60,11 @@ export class Drop {
     return this.toView(this.getRecord(eventId));
   }
 
-  list(filter?: { promoterId?: string }): DropView[] {
+  // The public list hides cancelled events. Promoters and admins still see theirs.
+  list(filter?: { promoterId?: string; includeCancelled?: boolean }): DropView[] {
     return Object.values(state.drops)
       .filter((d) => !filter?.promoterId || d.promoterId === filter.promoterId)
-      .filter((d) => d.state !== "cancelled")
+      .filter((d) => filter?.includeCancelled || d.state !== "cancelled")
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
       .map((d) => this.toView(d));
   }
@@ -130,6 +133,7 @@ export class Drop {
       createdAt: nowIso(),
     };
     touchDrop(id);
+    alerts.onNewEvent(state.drops[id]);
     return this.toView(state.drops[id]);
   }
 
@@ -148,6 +152,7 @@ export class Drop {
 
   closeDrop(eventId?: string): DropView {
     const drop = this.getRecord(eventId);
+    if (drop.state === "cancelled") return this.toView(drop);
     drop.state = "closed";
     touchDrop(drop.id);
     return this.toView(drop);

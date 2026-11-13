@@ -2,6 +2,9 @@ import fs from "fs";
 import path from "path";
 import type {
   AgentLogEntry,
+  AlertItem,
+  CancelProgress,
+  Payout,
   BatchStatus,
   DropState,
   DropEvent,
@@ -35,6 +38,22 @@ export interface DropRecord {
   issuanceId: string;
   issuanceTx?: string;
   createdAt?: string;
+  cancel?: CancelProgress;
+}
+
+export interface WishRecord {
+  id: string;
+  fanId: string;
+  query: string;
+  city?: string;
+  maxZar?: number;
+  createdAt: string;
+}
+
+export interface CheckinRecord {
+  address: string;
+  fanId?: string;
+  at: string;
 }
 
 export interface FanRecord {
@@ -95,6 +114,11 @@ export interface StoreState {
   agentLog: AgentLogEntry[];
   events: DropEvent[];
   processedTx: string[];
+  wishes: Record<string, WishRecord>;
+  alerts: Record<string, AlertItem[]>; // keyed by fanId, newest last
+  checkins: Record<string, CheckinRecord[]>; // keyed by eventId
+  turnedAway: Record<string, number>; // keyed by eventId
+  payouts: Record<string, Payout>;
 }
 
 const DATA_FILE = process.env.DROP_DATA_FILE || path.resolve(__dirname, "../../data.json");
@@ -113,6 +137,11 @@ function emptyState(): StoreState {
     agentLog: [],
     events: [],
     processedTx: [],
+    wishes: {},
+    alerts: {},
+    checkins: {},
+    turnedAway: {},
+    payouts: {},
   };
 }
 
@@ -226,7 +255,8 @@ export async function initStore() {
     const fromTable = fromRow(r);
     // The snapshot wins on live counters if it is ahead of the table.
     const snapDrop = state.drops[fromTable.id];
-    state.drops[fromTable.id] = snapDrop && snapDrop.sold > fromTable.sold ? { ...fromTable, sold: snapDrop.sold, state: snapDrop.state } : fromTable;
+    const merged = snapDrop && snapDrop.sold > fromTable.sold ? { ...fromTable, sold: snapDrop.sold, state: snapDrop.state } : fromTable;
+    state.drops[fromTable.id] = snapDrop?.cancel ? { ...merged, cancel: snapDrop.cancel } : merged;
   }
   console.log(`Loaded ${Object.keys(state.drops).length} event(s) from Supabase`);
 }
@@ -242,6 +272,7 @@ export function save() {
     state.events = state.events.slice(-300);
     state.agentLog = state.agentLog.slice(-500);
     state.processedTx = state.processedTx.slice(-2000);
+    for (const k of Object.keys(state.alerts)) state.alerts[k] = state.alerts[k].slice(-100);
 
     if (!supabaseConfigured()) {
       fs.writeFile(DATA_FILE, JSON.stringify(state, null, 2), (error) => {
