@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import type { Listing } from "@drop/shared";
 import { AnimatePresence, motion } from "motion/react";
 import { Button, Coin, Enter, TopBar } from "../components/ui";
 import { api } from "../lib/api";
 import { rand } from "../lib/format";
 import { useApp } from "../lib/store";
+import { useAuth } from "../lib/auth";
+import { useEvent } from "./EventPage";
 
 const STEPS = [
   { key: "open", label: "Listed for resale" },
@@ -13,7 +16,11 @@ const STEPS = [
 ];
 
 export function Resell() {
-  const { fanId, drop, tick } = useApp();
+  const { eventId } = useParams();
+  const [drop] = useEvent(eventId);
+  const { me } = useAuth();
+  const fanId = me?.id ?? "";
+  const { tick } = useApp();
   const face = Number(drop?.priceZar ?? 1200);
   const cap = Number(drop?.resaleCapZar ?? face);
   const feePct = drop?.resaleFeePct ?? 5;
@@ -25,15 +32,16 @@ export function Resell() {
   const [before, setBefore] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    api.getTickets(fanId).then((t) => setTickets(t.count)).catch(() => setTickets(0));
+    if (!eventId) return;
+    api.tickets(eventId).then((t) => setTickets(t.count)).catch(() => setTickets(0));
     api
-      .listListings()
+      .listings(eventId)
       .then((all) => {
         const mine = all.filter((l) => l.sellerFanId === fanId && !before.has(l.id));
         setListing(mine[mine.length - 1] ?? null);
       })
       .catch(() => undefined);
-  }, [fanId, tick, before]);
+  }, [fanId, eventId, tick, before]);
 
   const n = Number(price.replace(/[^\d.]/g, "")) || 0;
   const over = n > cap;
@@ -45,10 +53,10 @@ export function Resell() {
   async function list() {
     setError("");
     try {
-      const existing = await api.listListings().catch(() => [] as Listing[]);
+      const existing = await api.listings(eventId!).catch(() => [] as Listing[]);
       setBefore(new Set(existing.map((l) => l.id)));
       setStarted(true);
-      await api.runAgent(fanId, "sell", n);
+      await api.resell(eventId!, n);
     } catch (e) {
       setStarted(false);
       setError(e instanceof Error ? e.message : "Couldn't list your ticket");

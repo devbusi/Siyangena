@@ -1,43 +1,49 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
+import type { Drop, FanTickets, FanWallet } from "@drop/shared";
 import { Button, Enter, Marquee, Ticket, TopBar } from "../components/ui";
-import { CityArt, type Scene } from "../components/CityArt";
+import { CityArt, SCENES, type Scene } from "../components/CityArt";
 import { api } from "../lib/api";
-import { rand } from "../lib/format";
+import { dateLong, rand, time } from "../lib/format";
 import { useApp } from "../lib/store";
 
 export function TabBar() {
   return (
     <nav className="tabbar" aria-label="Main">
       <NavLink to="/events">Events</NavLink>
-      <NavLink to="/live">Agent</NavLink>
       <NavLink to="/tickets">Tickets</NavLink>
+      <NavLink to="/wallet">Wallet</NavLink>
       <NavLink to="/wishlist">Wishlist</NavLink>
     </nav>
   );
 }
 
+export function EventArt({ drop }: { drop: Drop }) {
+  if (drop.posterUrl) return <img className="poster" src={drop.posterUrl} alt="" />;
+  const scene = (SCENES.find((s) => s.id === drop.scene)?.id ?? "longstreet") as Scene;
+  return <CityArt scene={scene} />;
+}
+
+export function salePill(drop: Drop): { label: string; tone: string } {
+  switch (drop.state) {
+    case "open":
+      return { label: `${drop.supply - drop.sold} left`, tone: "pill-live" };
+    case "sold_out":
+      return { label: "Resale only", tone: "pill-quiet" };
+    case "closed":
+      return { label: "Sales closed", tone: "pill-quiet" };
+    default:
+      return { label: "On sale soon", tone: "pill-quiet" };
+  }
+}
+
 const CITIES = ["All", "Cape Town", "Johannesburg", "Durban"] as const;
 
 export function Discover() {
-  const { drop } = useApp();
+  const { drops } = useApp();
   const [city, setCity] = useState<(typeof CITIES)[number]>("All");
-  const cards: { scene: Scene; city: string; name: string; when: string; price: string; pill: string; tone: string; to?: string }[] = [
-    {
-      scene: "longstreet",
-      city: "Cape Town",
-      name: drop?.name ?? "Sunset Sessions Live",
-      when: "Sat 12 Dec",
-      price: rand(drop?.priceZar ?? 1200),
-      pill: drop?.state === "open" ? "On sale now" : drop?.state === "sold_out" ? "Resale only" : "On sale at 18:00",
-      tone: drop?.state === "open" ? "pill-live" : "pill-quiet",
-      to: "/event",
-    },
-    { scene: "braamfontein", city: "Johannesburg", name: "Braam Rooftop Sessions", when: "Fri 18 Dec", price: "R250", pill: "Opens Friday", tone: "pill-quiet" },
-    { scene: "floridaroad", city: "Durban", name: "Florida Road Sundowner", when: "Sat 19 Dec", price: "R180", pill: "Opens Monday", tone: "pill-quiet" },
-  ];
-  const shown = cards.filter((c) => city === "All" || c.city === city);
+  const shown = drops.filter((d) => city === "All" || d.city === city || d.venue.includes(city));
 
   return (
     <>
@@ -54,48 +60,45 @@ export function Discover() {
             ))}
           </div>
         </Enter>
-        <motion.div layout className="event-grid wide" style={{ marginTop: 18 }}>
-          <AnimatePresence mode="popLayout">
-            {shown.map((c, i) => {
-              const inner = (
-                <>
-                  <div className="event-art">
-                    <CityArt scene={c.scene} />
-                  </div>
-                  <div className="event-body">
-                    <div>
-                      <h3>{c.name}</h3>
-                      <p className="faint">
-                        {c.city}, {c.when}, from {c.price}
-                      </p>
-                    </div>
-                    <span className={`pill ${c.tone}`}>{c.pill}</span>
-                  </div>
-                </>
-              );
-              return (
-                <motion.div
-                  key={c.name}
-                  layout
-                  initial={{ opacity: 0, y: 24 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 26, delay: i * 0.05 }}
-                >
-                  {c.to ? (
-                    <Link to={c.to} className="event-card">
-                      {inner}
+        {shown.length === 0 ? (
+          <div className="callout stack" style={{ gap: 6, marginTop: 18 }}>
+            <strong>No events here yet</strong>
+            <p className="muted">New events show up the moment a promoter creates them. Add who you want to see to your wishlist.</p>
+          </div>
+        ) : (
+          <motion.div layout className="event-grid wide" style={{ marginTop: 18 }}>
+            <AnimatePresence mode="popLayout">
+              {shown.map((d, i) => {
+                const pill = salePill(d);
+                return (
+                  <motion.div
+                    key={d.id}
+                    layout
+                    initial={{ opacity: 0, y: 24 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 26, delay: i * 0.05 }}
+                  >
+                    <Link to={`/events/${d.id}`} className="event-card">
+                      <div className="event-art">
+                        <EventArt drop={d} />
+                      </div>
+                      <div className="event-body">
+                        <div>
+                          <h3>{d.name}</h3>
+                          <p className="faint">
+                            {d.venue}, {dateLong(d.startsAt)}, {rand(d.priceZar)}
+                          </p>
+                        </div>
+                        <span className={`pill ${pill.tone}`}>{pill.label}</span>
+                      </div>
                     </Link>
-                  ) : (
-                    <div className="event-card">
-                      {inner}
-                    </div>
-                  )}
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        </motion.div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </motion.div>
+        )}
       </div>
       <TabBar />
     </>
@@ -103,14 +106,16 @@ export function Discover() {
 }
 
 export function Tickets() {
-  const { fanId, drop, tick } = useApp();
+  const { tick } = useApp();
   const navigate = useNavigate();
-  const [count, setCount] = useState(0);
+  const [data, setData] = useState<FanTickets | null>(null);
   const [gifting, setGifting] = useState(false);
 
   useEffect(() => {
-    api.getTickets(fanId).then((t) => setCount(t.count)).catch(() => setCount(0));
-  }, [fanId, tick]);
+    api.tickets().then(setData).catch(() => setData({ count: 0, history: [], events: [] }));
+  }, [tick]);
+
+  const held = data?.events ?? [];
 
   return (
     <>
@@ -119,27 +124,38 @@ export function Tickets() {
         <Enter>
           <h1 style={{ margin: "10px 0 18px" }}>My tickets</h1>
         </Enter>
-        {count === 0 ? (
+        {!data ? (
+          <p className="muted">Loading your tickets</p>
+        ) : held.length === 0 ? (
           <div className="callout stack" style={{ gap: 10 }}>
             <strong>No tickets yet</strong>
-            <p className="muted">Arm your agent and it buys the moment tickets go on sale.</p>
-            <Button onClick={() => navigate("/live")}>Go to my agent</Button>
+            <p className="muted">Find an event and buy at face value, or add an agent that buys the moment sales open.</p>
+            <Button onClick={() => navigate("/events")}>Find tickets</Button>
           </div>
         ) : (
-          <div className="stack" style={{ gap: 18 }}>
-            {Array.from({ length: count }).map((_, i) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 40, rotate: -4 }} animate={{ opacity: 1, y: 0, rotate: i % 2 ? 1.5 : -1.5 }} transition={{ type: "spring", stiffness: 260, damping: 16, delay: i * 0.08 }} className="stack" style={{ gap: 10 }}>
-                <Ticket name={drop?.name ?? "Sunset Sessions Live"} line={drop?.venue ?? "Long Street, Cape Town"} label={`Ticket ${i + 1} of ${count}`} />
-                <div className="row" style={{ gap: 8 }}>
-                  <Button variant="ghost" className="btn-sm" style={{ flex: 1 }} onClick={() => setGifting(true)}>
-                    Send to a friend
-                  </Button>
-                  <Button variant="ghost" className="btn-sm" style={{ flex: 1 }} onClick={() => navigate("/resell")}>
-                    I can't go
-                  </Button>
-                </div>
-              </motion.div>
-            ))}
+          <div className="stack" style={{ gap: 22 }}>
+            {held.flatMap((e) =>
+              Array.from({ length: e.count }).map((_, i) => (
+                <motion.div
+                  key={`${e.eventId}-${i}`}
+                  initial={{ opacity: 0, y: 40, rotate: -4 }}
+                  animate={{ opacity: 1, y: 0, rotate: i % 2 ? 1.5 : -1.5 }}
+                  transition={{ type: "spring", stiffness: 260, damping: 16, delay: i * 0.08 }}
+                  className="stack"
+                  style={{ gap: 10 }}
+                >
+                  <Ticket name={e.name} line={`${e.venue}, ${dateLong(e.startsAt)}`} label={`Ticket ${i + 1} of ${e.count}`} />
+                  <div className="row" style={{ gap: 8 }}>
+                    <Button variant="ghost" className="btn-sm" style={{ flex: 1 }} onClick={() => setGifting(true)}>
+                      Send to a friend
+                    </Button>
+                    <Button variant="ghost" className="btn-sm" style={{ flex: 1 }} onClick={() => navigate(`/tickets/${e.eventId}/resell`)}>
+                      I can't go
+                    </Button>
+                  </div>
+                </motion.div>
+              )),
+            )}
             <p className="faint" style={{ textAlign: "center" }}>
               Tickets only change hands through Siyangena, so nobody can sell you a fake or a copy.
             </p>
@@ -163,8 +179,8 @@ export function Tickets() {
               <h2>Send to a friend</h2>
               <p className="muted">Free and instant. Their name goes on the ticket for the gate, and each ticket can be gifted once.</p>
               <div className="field">
-                <label htmlFor="friend">Friend's mobile number</label>
-                <input id="friend" className="input" type="tel" inputMode="tel" placeholder="082 000 0000" />
+                <label htmlFor="friend">Friend's email</label>
+                <input id="friend" className="input" type="email" placeholder="friend@example.com" />
               </div>
               <p className="callout callout-sun">Gifting opens before the event. Selling instead? Use "I can't go" so you're paid safely.</p>
               <Button variant="ghost" block onClick={() => setGifting(false)}>
@@ -174,6 +190,88 @@ export function Tickets() {
           </motion.div>
         )}
       </AnimatePresence>
+    </>
+  );
+}
+
+export function WalletScreen() {
+  const { tick } = useApp();
+  const [wallet, setWallet] = useState<FanWallet | null>(null);
+  const [history, setHistory] = useState<FanTickets["history"]>([]);
+  const [busy, setBusy] = useState(0);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api.wallet().then(setWallet).catch(() => setWallet(null));
+    api.tickets().then((t) => setHistory(t.history)).catch(() => undefined);
+  }, [tick]);
+
+  async function topUp(amount: number) {
+    setError("");
+    setBusy(amount);
+    try {
+      setWallet(await api.topUp(amount));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Top-up didn't go through");
+    } finally {
+      setBusy(0);
+    }
+  }
+
+  return (
+    <>
+      <div className="phone">
+        <TopBar />
+        <Enter>
+          <h1 style={{ margin: "10px 0 16px" }}>Wallet</h1>
+          <div className="panel stack" style={{ background: "var(--sun)", gap: 8 }}>
+            <p style={{ fontWeight: 800 }}>You can spend</p>
+            <p className="stat-value num" style={{ fontSize: "4rem" }}>
+              {wallet ? rand(wallet.allowanceZar) : "R…"}
+            </p>
+            <p className="faint">Your money for tickets and your agent. Anything you don't spend stays yours.</p>
+          </div>
+        </Enter>
+        <Enter delay={0.06}>
+          <div className="stack" style={{ marginTop: 16 }}>
+            <p style={{ fontWeight: 800 }}>Add test money</p>
+            <div className="row" style={{ gap: 8 }}>
+              {[500, 1000, 2500].map((a) => (
+                <Button key={a} variant="ghost" className="btn-sm" style={{ flex: 1 }} disabled={busy > 0} onClick={() => topUp(a)}>
+                  {busy === a ? "Adding" : rand(a)}
+                </Button>
+              ))}
+            </div>
+            <p className="faint">This is the test version, so top-ups are play money. Card and instant EFT come at launch.</p>
+            {error && (
+              <p role="alert" className="callout callout-blocked">
+                {error}
+              </p>
+            )}
+            {history.length > 0 && (
+              <div className="stack" style={{ gap: 0, marginTop: 8 }}>
+                <p className="d" style={{ fontSize: "1.4rem", marginBottom: 6 }}>
+                  History
+                </p>
+                {history.slice(0, 12).map((h, i) => (
+                  <div key={i} className="row" style={{ padding: "10px 0", borderBottom: "2px solid #000" }}>
+                    <div>
+                      <strong>{h.description}</strong>
+                      <p className="faint">{time(h.at)}</p>
+                    </div>
+                    {h.explorerUrl && (
+                      <a href={h.explorerUrl} target="_blank" rel="noreferrer">
+                        Receipt
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Enter>
+      </div>
+      <TabBar />
     </>
   );
 }

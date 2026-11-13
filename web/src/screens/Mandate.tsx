@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { Button, Enter, TopBar } from "../components/ui";
 import { api } from "../lib/api";
 import { rand } from "../lib/format";
-import { useApp } from "../lib/store";
+import { useEvent } from "./EventPage";
 
 export function Mandate() {
-  const { fanId, drop } = useApp();
+  const { id } = useParams();
+  const [drop] = useEvent(id);
   const navigate = useNavigate();
   const max = drop?.maxPerFan ?? 4;
   const face = Number(drop?.priceZar ?? 1200);
@@ -17,8 +18,9 @@ export function Mandate() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!id) return;
     api
-      .getMandate(fanId)
+      .getMandate(id)
       .then((m) => {
         if (m) {
           setQty(m.quantity);
@@ -26,14 +28,14 @@ export function Mandate() {
         }
       })
       .catch(() => undefined);
-  }, [fanId]);
+  }, [id]);
 
   async function save() {
     setBusy(true);
     setError("");
     try {
-      await api.putMandate(fanId, { quantity: qty, ceilingZar: ceiling });
-      navigate("/live");
+      await api.putMandate(id!, { quantity: qty, ceilingZar: ceiling });
+      navigate(`/events/${id}/live`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't save your limits");
     } finally {
@@ -46,7 +48,7 @@ export function Mandate() {
   return (
     <>
       <div className="phone">
-        <TopBar back="/verify" />
+        <TopBar back={`/events/${id}`} />
         <Enter>
           <h1 style={{ marginTop: 12 }}>Tell your agent what to get</h1>
           <p className="muted" style={{ marginTop: 10 }}>
@@ -112,10 +114,10 @@ export function Mandate() {
       <div className="bottom-bar">
         <div className="bottom-bar-inner stack" style={{ gap: 8 }}>
           <Button block disabled={busy} onClick={save}>
-            Fund {rand(total)} and save limits
+            Save my agent's limits
           </Button>
           <p className="faint" style={{ textAlign: "center" }}>
-            Pay by card or instant EFT. Anything your agent doesn't spend comes back to you.
+            Your agent spends from your Siyangena wallet, never more than {rand(total)}.
           </p>
         </div>
       </div>

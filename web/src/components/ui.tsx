@@ -1,7 +1,9 @@
 import { motion, useReducedMotion, type HTMLMotionProps } from "motion/react";
 import type { ReactNode } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useApp, type Persona } from "../lib/store";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../lib/auth";
+import { MOCK } from "../lib/config";
+import { mockAuth } from "../lib/mock";
 import type { Tone } from "../lib/format";
 
 const spring = { type: "spring" as const, stiffness: 520, damping: 22 };
@@ -14,7 +16,7 @@ export function Button({
   block,
   className = "",
   ...props
-}: HTMLMotionProps<"button"> & { variant?: Variant; block?: boolean }) {
+}: HTMLMotionProps<"button"> & { variant?: Variant | "lilac"; block?: boolean }) {
   return (
     <motion.button
       whileTap={props.disabled ? undefined : { scale: 0.95 }}
@@ -159,13 +161,22 @@ export function Ticker({ items }: { items: string[] }) {
   return <Marquee rows={[items]} size={30} speed={30} />;
 }
 
-const PERSONAS: { id: Persona; label: string }[] = [
-  { id: "thandi", label: "Thandi" },
-  { id: "sipho", label: "Sipho" },
-  { id: "promoter", label: "Promoter" },
-];
+// The logo: the coin mark from the stickers plus the wordmark, big enough to stand out.
+export function Logo({ size = 1 }: { size?: number }) {
+  return (
+    <span className="logo" style={{ gap: 10 * size }}>
+      <Coin size={Math.round(50 * size)} tilt={-10} />
+      <span className="logo-word" style={{ fontSize: `${2.2 * size}rem` }}>
+        Siyangena
+      </span>
+    </span>
+  );
+}
 
 export function TopBar({ back }: { back?: string }) {
+  const { signedIn, me, signOut } = useAuth();
+  const navigate = useNavigate();
+  const home = !me ? "/" : me.role === "admin" ? "/admin" : me.role === "promoter" ? "/promoter" : "/events";
   return (
     <header className="topbar">
       {back ? (
@@ -175,37 +186,57 @@ export function TopBar({ back }: { back?: string }) {
           </svg>
         </Link>
       ) : (
-        <Link to="/events" className="wordmark">
-          <span className="wordmark-mark" aria-hidden="true">
-            <svg width="20" height="20" viewBox="-30 -30 60 60">
-              <path d={STAR} fill="#000" />
-            </svg>
-          </span>
-          Siyangena
+        <Link to={home} className="wordmark" aria-label="Siyangena home">
+          <Logo size={0.78} />
+        </Link>
+      )}
+      {signedIn ? (
+        <div className="account">
+          <Link to={me?.role === "fan" ? "/wallet" : home} className="account-name">
+            {me?.fullName?.split(" ")[0] || "Account"}
+          </Link>
+          <button
+            type="button"
+            className="account-out"
+            onClick={async () => {
+              await signOut();
+              navigate("/");
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      ) : (
+        <Link to="/signin" className="btn btn-ghost btn-sm" style={{ minHeight: 44 }}>
+          Sign in
         </Link>
       )}
     </header>
   );
 }
 
-// Demo control that sits on the sky outside the app frame: switch who you're looking at.
+// Preview only (mock mode): jump between a fan, a promoter and an admin.
 export function DemoBar() {
-  const { persona, setPersona } = useApp();
   const navigate = useNavigate();
-  const onDesk = useLocation().pathname.startsWith("/promoter");
-  const shown = onDesk ? "promoter" : persona === "promoter" ? "thandi" : persona;
+  const { me } = useAuth();
+  if (!MOCK) return null;
+  const items: { id: "fan" | "promoter" | "admin"; label: string; to: string }[] = [
+    { id: "fan", label: "Fan", to: "/events" },
+    { id: "promoter", label: "Promoter", to: "/promoter" },
+    { id: "admin", label: "Admin", to: "/admin" },
+  ];
   return (
     <div className="demobar">
-      <span>Viewing as</span>
-      <div className="personas" role="group" aria-label="Viewing as">
-        {PERSONAS.map((p) => (
+      <span>Preview as</span>
+      <div className="personas" role="group" aria-label="Preview as">
+        {items.map((p) => (
           <button
             key={p.id}
             type="button"
-            aria-pressed={shown === p.id}
+            aria-pressed={me?.role === p.id}
             onClick={() => {
-              setPersona(p.id);
-              navigate(p.id === "promoter" ? "/promoter" : p.id === "sipho" ? "/live" : "/event");
+              mockAuth.as(p.id);
+              navigate(p.to);
             }}
           >
             {p.label}
@@ -214,6 +245,28 @@ export function DemoBar() {
       </div>
     </div>
   );
+}
+
+// Route guards. Signed-out people go to sign in, then come back.
+export function RequireAuth({ children, role }: { children: ReactNode; role?: "fan" | "promoter" | "admin" }) {
+  const { ready, signedIn, me } = useAuth();
+  const location = useLocation();
+  if (!ready || (signedIn && !me)) {
+    return (
+      <div className="phone">
+        <TopBar />
+        <p className="muted" style={{ marginTop: 40, textAlign: "center" }}>
+          Loading your account
+        </p>
+      </div>
+    );
+  }
+  if (!signedIn || !me) return <Navigate to={`/signin?next=${encodeURIComponent(location.pathname)}`} replace />;
+  if (me.role === "fan" && !me.walletReady && location.pathname !== "/setup") return <Navigate to={`/setup?next=${encodeURIComponent(location.pathname)}`} replace />;
+  if (role && me.role !== role && me.role !== "admin") {
+    return <Navigate to={me.role === "promoter" ? "/promoter" : "/events"} replace />;
+  }
+  return <>{children}</>;
 }
 
 // One orchestrated entrance per screen: children rise in sequence.

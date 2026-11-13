@@ -1,11 +1,13 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import type { FanWallet, Mandate } from "@drop/shared";
 import { Button, Coin, Enter, FeedRow, Ticket, TopBar } from "../components/ui";
 import { api } from "../lib/api";
 import { describe, rand, time } from "../lib/format";
 import { useApp } from "../lib/store";
+import { useAuth } from "../lib/auth";
+import { useEvent } from "./EventPage";
 
 const GLOBAL = new Set(["drop.opened", "drop.sold_out"]);
 
@@ -38,7 +40,11 @@ function statusFrom(type: string | undefined, tool: string | undefined, n: numbe
 }
 
 export function LiveSale() {
-  const { fanId, events, tick, drop } = useApp();
+  const { id } = useParams();
+  const [drop] = useEvent(id);
+  const { me } = useAuth();
+  const fanId = me?.id ?? "";
+  const { events, tick } = useApp();
   const navigate = useNavigate();
   const reduce = useReducedMotion();
   const [wallet, setWallet] = useState<FanWallet | null>(null);
@@ -47,13 +53,14 @@ export function LiveSale() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    api.getWallet(fanId).then(setWallet).catch(() => setWallet(null));
-    api.getMandate(fanId).then(setMandate).catch(() => setMandate(null));
-  }, [fanId, tick]);
+    if (!id) return;
+    api.wallet(id).then(setWallet).catch(() => setWallet(null));
+    api.getMandate(id).then(setMandate).catch(() => setMandate(null));
+  }, [id, tick]);
 
   const mine = useMemo(
-    () => events.filter((e) => e.fanId === fanId || (!e.fanId && GLOBAL.has(e.type))),
-    [events, fanId],
+    () => events.filter((e) => (!e.eventId || e.eventId === id) && (e.fanId === fanId || (!e.fanId && GLOBAL.has(e.type)))),
+    [events, fanId, id],
   );
   const last = mine[mine.length - 1];
   const allowance = Number(wallet?.allowanceZar ?? 0);
@@ -67,7 +74,7 @@ export function LiveSale() {
     setError("");
     try {
       setArmed(true);
-      await api.runAgent(fanId, "resale");
+      await api.runAgent(id!, "resale");
     } catch (e) {
       setArmed(false);
       setError(e instanceof Error ? e.message : "Couldn't start your agent");
@@ -78,7 +85,7 @@ export function LiveSale() {
     setError("");
     try {
       setArmed(true);
-      await api.runAgent(fanId, "buy");
+      await api.runAgent(id!, "buy");
     } catch (e) {
       setArmed(false);
       setError(e instanceof Error ? e.message : "Couldn't start your agent");
@@ -88,7 +95,7 @@ export function LiveSale() {
   return (
     <>
       <div className="phone">
-        <TopBar back="/event" />
+        <TopBar back={`/events/${id}`} />
 
         <Enter>
           <section className="agent-stage" aria-live="polite">

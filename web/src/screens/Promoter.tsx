@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { ACTIVE, type PromoterStats } from "@drop/shared";
 import { Button, Enter, FeedRow, Marquee, TopBar } from "../components/ui";
@@ -9,6 +9,11 @@ import { MOCK } from "../lib/config";
 import { mockDemo } from "../lib/mock";
 import { describe, rand, time } from "../lib/format";
 import { useApp } from "../lib/store";
+import { useAuth } from "../lib/auth";
+import { useEvent } from "./EventPage";
+import { EventArt, salePill } from "./FanHome";
+import { dateLong } from "../lib/format";
+import type { Drop } from "@drop/shared";
 
 const toZar = (units: string | number) => Number(units) * ACTIVE.fxZarPerUnit;
 
@@ -23,7 +28,10 @@ function Toggle({ on, label, onChange }: { on: boolean; label: string; onChange:
 // ---------- Control room ----------
 
 export function PromoterDesk() {
-  const { drop, events, tick, refreshDrop } = useApp();
+  const { id } = useParams();
+  const [drop, refreshDrop] = useEvent(id);
+  const { events: allEvents, tick, refreshDrops } = useApp();
+  const events = allEvents.filter((e) => e.eventId === id);
   const navigate = useNavigate();
   const [stats, setStats] = useState<PromoterStats | null>(null);
   const [cap, setCap] = useState("");
@@ -34,8 +42,8 @@ export function PromoterDesk() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    api.getStats().then(setStats).catch(() => setStats(null));
-  }, [tick]);
+    if (id) api.stats(id).then(setStats).catch(() => setStats(null));
+  }, [id, tick]);
 
   useEffect(() => {
     if (!drop) return;
@@ -52,7 +60,8 @@ export function PromoterDesk() {
     setError("");
     try {
       await fn();
-      await refreshDrop();
+      refreshDrop();
+      refreshDrops();
       if (ok) setSaved(ok);
     } catch (e) {
       setError(e instanceof Error ? e.message : "That didn't work");
@@ -66,8 +75,8 @@ export function PromoterDesk() {
 
   return (
     <div className="desk">
-      <TopBar />
-      <Marquee rows={[[drop ? drop.name : "Your first event", "Verified fans only", "Resale at your price", "Live"]]} size={34} speed={36} />
+      <TopBar back="/promoter" />
+      <Marquee rows={[[drop ? drop.name : "Your event", "Verified fans only", "Resale at your price", "Live"]]} size={34} speed={36} />
       {!drop ? (
         <Enter>
           <div className="stack" style={{ maxWidth: 520, margin: "40px auto", textAlign: "center" }}>
@@ -92,11 +101,11 @@ export function PromoterDesk() {
                   New event
                 </Button>
                 {open ? (
-                  <Button variant="ghost" disabled={busy} onClick={() => run(() => api.closeSales())}>
+                  <Button variant="ghost" disabled={busy} onClick={() => run(() => api.closeSales(id!))}>
                     Close sales
                   </Button>
                 ) : (
-                  <Button variant="sun" disabled={busy || drop.state === "sold_out"} onClick={() => run(() => api.openSales())}>
+                  <Button variant="sun" disabled={busy || drop.state === "sold_out"} onClick={() => run(() => api.openSales(id!))}>
                     Open sales
                   </Button>
                 )}
@@ -135,7 +144,7 @@ export function PromoterDesk() {
                   className="panel stack"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    run(() => api.updateDrop({ resaleCapZar: capN, resaleFeePct: Number(fee), maxPerFan: Number(perFan) }), "Saved. New sales follow these rules.");
+                    run(() => api.updateEvent(id!, { resaleCapZar: capN, resaleFeePct: Number(fee), maxPerFan: Number(perFan) }), "Saved. New sales follow these rules.");
                   }}
                 >
                   <h2 style={{ fontSize: "1.8rem" }}>Your rules</h2>
@@ -194,10 +203,10 @@ export function PromoterDesk() {
                 {MOCK && (
                   <div className="panel stack callout-sun" style={{ gap: 10 }}>
                     <h3>Try a bad actor</h3>
-                    <Button variant="ghost" block onClick={() => mockDemo.scalperLists()}>
+                    <Button variant="ghost" block onClick={() => mockDemo.scalperLists(id!)}>
                       Scalper lists at R1,700
                     </Button>
-                    <Button variant="ghost" block onClick={() => mockDemo.fakeTicket()}>
+                    <Button variant="ghost" block onClick={() => mockDemo.fakeTicket(id!)}>
                       Someone sends a fake ticket
                     </Button>
                   </div>
@@ -220,7 +229,7 @@ export function PromoterDesk() {
                         .slice(0, 40)
                         .map((e, i) => {
                           const d = describe(e);
-                          const who = e.fanId ? `${e.fanId[0].toUpperCase()}${e.fanId.slice(1)}: ` : "";
+                          const who = e.fanId && e.fanId.length < 12 ? `${e.fanId[0].toUpperCase()}${e.fanId.slice(1)}: ` : e.fanId ? "A fan: " : "";
                           return <FeedRow key={`${e.at}-${e.type}-${events.length - i}`} title={who + d.title} detail={d.detail} tone={d.tone} at={time(e.at)} receipt={e.explorerUrl} />;
                         })}
                     </AnimatePresence>
@@ -235,12 +244,139 @@ export function PromoterDesk() {
   );
 }
 
+// ---------- Promoter home: apply, wait for review, or run events ----------
+
+export function PromoterHome() {
+  const { me } = useAuth();
+  const { tick } = useApp();
+  const navigate = useNavigate();
+  const [mine, setMine] = useState<Drop[] | null>(null);
+  const app = me?.application;
+  const approved = me?.role === "admin" || app?.status === "approved";
+
+  useEffect(() => {
+    if (approved) api.myEvents().then(setMine).catch(() => setMine([]));
+  }, [approved, tick]);
+
+  if (!me) return null;
+  if (!app && me.role !== "admin") return <Navigate to="/promoter/apply" replace />;
+  if (!approved) return <ReviewStatus />;
+
+  return (
+    <div className="desk">
+      <TopBar />
+      <Marquee rows={[["Your events", "Sell out fairly", "Earn on resale", "No touts"]]} size={34} speed={36} />
+      <Enter>
+        <div className="row" style={{ flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
+          <div>
+            <span className="pill pill-ok">Approved</span>
+            <h1 style={{ marginTop: 10, fontSize: "clamp(2.6rem, 6vw, 4.2rem)" }}>{app?.displayName ?? me.fullName}</h1>
+          </div>
+          <Button onClick={() => navigate("/promoter/create")}>New event</Button>
+        </div>
+      </Enter>
+      {mine === null ? (
+        <p className="muted" style={{ marginTop: 20 }}>
+          Loading your events
+        </p>
+      ) : mine.length === 0 ? (
+        <div className="callout stack" style={{ gap: 8, marginTop: 20, maxWidth: 620 }}>
+          <strong>No events yet</strong>
+          <p className="muted">Create your first event. You set the price, how many tickets each fan can hold and the resale cap.</p>
+          <Button onClick={() => navigate("/promoter/create")}>Create an event</Button>
+        </div>
+      ) : (
+        <div className="event-grid wide" style={{ marginTop: 20 }}>
+          {mine.map((d) => {
+            const pill = salePill(d);
+            return (
+              <Link key={d.id} to={`/promoter/events/${d.id}`} className="event-card">
+                <div className="event-art">
+                  <EventArt drop={d} />
+                </div>
+                <div className="event-body">
+                  <div>
+                    <h3>{d.name}</h3>
+                    <p className="faint">
+                      {dateLong(d.startsAt)}, {d.sold} of {d.supply} sold
+                    </p>
+                  </div>
+                  <span className={`pill ${pill.tone}`}>{pill.label}</span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReviewStatus() {
+  const { me } = useAuth();
+  const navigate = useNavigate();
+  const app = me!.application!;
+  const status = app.status;
+  const steps: { label: string; state: "done" | "now" | "todo" }[] = [
+    { label: "Details sent", state: "done" },
+    { label: app.kind === "business" ? "Business details checked" : "Past events and socials checked", state: status === "pending" ? "now" : "done" },
+    { label: "Approved: your events can go on sale", state: "todo" },
+  ];
+  return (
+    <div className="desk">
+      <TopBar />
+      <div className="desk-form" style={{ marginTop: 16 }}>
+        <Enter>
+          <div className="stack">
+            <span className={`pill ${status === "pending" ? "pill-live" : "pill-blocked"}`} style={{ alignSelf: "flex-start" }}>
+              {status === "pending" ? "In review" : status === "needs_more" ? "We need a bit more" : "Not approved"}
+            </span>
+            <h1>{status === "pending" ? "We're checking your details" : status === "needs_more" ? "Almost there" : "We couldn't approve this"}</h1>
+            <p className="muted">
+              {status === "pending"
+                ? "A person on our team looks at every promoter, usually within a day. We'll show the result here."
+                : app.reviewNote || "Update your details and send them again."}
+            </p>
+            <ol className="steps panel" style={{ padding: 18 }}>
+              {steps.map((s) => (
+                <li key={s.label} className={s.state}>
+                  <span className="step-dot" aria-hidden="true">
+                    {s.state === "done" && (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </span>
+                  {s.label}
+                </li>
+              ))}
+            </ol>
+            {status !== "pending" && <Button onClick={() => navigate("/promoter/apply")}>Update my details</Button>}
+          </div>
+        </Enter>
+        <aside className="desk-aside stack">
+          <div className="panel" style={{ background: "var(--sun-wash)" }}>
+            <p style={{ margin: 0 }}>
+              {app.kind === "independent"
+                ? "Independent promoters: ticket money is held until each event happens, then paid out the next morning. Fans are refunded automatically if an event is cancelled."
+                : "Registered businesses are paid as tickets sell."}
+            </p>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Onboarding ----------
 
 export function PromoterOnboard() {
   const navigate = useNavigate();
-  const [kind, setKind] = useState<"business" | "independent">("business");
+  const { me, refresh } = useAuth();
+  const [kind, setKind] = useState<"business" | "independent">(me?.application?.kind ?? "business");
   const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   return (
     <div className="desk">
@@ -268,9 +404,28 @@ export function PromoterOnboard() {
           <form
             className="stack"
             style={{ marginTop: 20 }}
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              setSent(true);
+              const f = new FormData(e.currentTarget);
+              const val = (k: string) => String(f.get(k) ?? "").trim() || undefined;
+              setBusy(true);
+              setError("");
+              try {
+                await api.apply({
+                  kind,
+                  displayName: val("pname") ?? "",
+                  registrationNumber: val("reg"),
+                  pastEvents: val("past"),
+                  socials: val("ig"),
+                  payoutDetails: val("bank") ?? "",
+                });
+                await refresh();
+                navigate("/promoter");
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Couldn't send your application");
+              } finally {
+                setBusy(false);
+              }
             }}
           >
             <div className="stack" style={{ gap: 10 }} role="group" aria-label="Promoter type">
@@ -286,23 +441,23 @@ export function PromoterOnboard() {
 
             <div className="field">
               <label htmlFor="pname">{kind === "business" ? "Business name" : "Your name or crew name"}</label>
-              <input id="pname" className="input" required placeholder={kind === "business" ? "Sunset Sessions (Pty) Ltd" : "Khaya Nights"} />
+              <input id="pname" name="pname" className="input" required defaultValue={me?.application?.displayName} placeholder={kind === "business" ? "Sunset Sessions (Pty) Ltd" : "Khaya Nights"} />
             </div>
 
             {kind === "business" ? (
               <div className="field">
                 <label htmlFor="reg">Company registration number</label>
-                <input id="reg" className="input" required placeholder="2021/123456/07" />
+                <input id="reg" name="reg" className="input" required placeholder="2021/123456/07" />
               </div>
             ) : (
               <>
                 <div className="field">
                   <label htmlFor="past">Events you've run before</label>
-                  <textarea id="past" className="input" placeholder="Links to past events, posters, ticket pages or socials" />
+                  <textarea id="past" name="past" className="input" placeholder="Links to past events, posters, ticket pages or socials" />
                 </div>
                 <div className="field">
                   <label htmlFor="ig">Instagram or TikTok</label>
-                  <input id="ig" className="input" placeholder="@khayanights" />
+                  <input id="ig" name="ig" className="input" placeholder="@khayanights" />
                 </div>
                 <div className="callout callout-sun stack" style={{ gap: 6 }}>
                   <strong>How payouts work for you</strong>
@@ -313,10 +468,15 @@ export function PromoterOnboard() {
 
             <div className="field">
               <label htmlFor="bank">Where should we pay you?</label>
-              <input id="bank" className="input" required placeholder="Bank and account holder" />
+              <input id="bank" name="bank" className="input" required placeholder="Bank and account holder" />
             </div>
-            <Button type="submit" block>
-              {kind === "business" ? "Verify my business" : "Send for review"}
+            {error && (
+              <p role="alert" className="callout callout-blocked">
+                {error}
+              </p>
+            )}
+            <Button type="submit" block disabled={busy}>
+              {busy ? "Sending" : "Send for review"}
             </Button>
           </form>
         </Enter>
@@ -350,14 +510,15 @@ const CAP_PRESETS = [
 
 export function CreateEvent() {
   const navigate = useNavigate();
-  const { refreshDrop } = useApp();
-  const [name, setName] = useState("Sunset Sessions Live");
+  const { refreshDrops } = useApp();
+  const [posterUrl, setPosterUrl] = useState("");
+  const [name, setName] = useState("");
   const [scene, setScene] = useState<Scene>("longstreet");
   const [poster, setPoster] = useState(false);
-  const [venue, setVenue] = useState("Long Street, Cape Town");
+  const [venue, setVenue] = useState("");
   const [date, setDate] = useState("2026-12-12T19:00");
   const [price, setPrice] = useState("1200");
-  const [supply, setSupply] = useState("3");
+  const [supply, setSupply] = useState("100");
   const [perFan, setPerFan] = useState("4");
   const [preset, setPreset] = useState<(typeof CAP_PRESETS)[number]["id"]>("50");
   const [customCap, setCustomCap] = useState("1800");
@@ -374,9 +535,12 @@ export function CreateEvent() {
     setBusy(true);
     setError("");
     try {
-      await api.createDrop({
+      const created = await api.createEvent({
         name,
         venue,
+        scene: poster ? undefined : scene,
+        city: SCENES.find((x) => x.id === scene)?.city,
+        posterUrl: poster && posterUrl ? posterUrl : undefined,
         startsAt: new Date(date).toISOString(),
         priceZar: p,
         supply: Number(supply),
@@ -384,8 +548,8 @@ export function CreateEvent() {
         resaleCapZar: cap,
         resaleFeePct: Number(fee),
       });
-      await refreshDrop();
-      navigate("/promoter");
+      await refreshDrops();
+      navigate(`/promoter/events/${created.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't create the event");
     } finally {
@@ -416,9 +580,10 @@ export function CreateEvent() {
               </label>
             </div>
             {poster ? (
-              <div className="poster-drop">
-                <strong>Drop your poster here</strong>
-                <p className="faint">JPG or PNG, portrait works best</p>
+              <div className="field">
+                <label htmlFor="poster">Poster image link</label>
+                <input id="poster" className="input" type="url" placeholder="https://…/poster.jpg" value={posterUrl} onChange={(e) => setPosterUrl(e.target.value)} />
+                <p className="faint">Paste a link to your poster for now. Uploads come next.</p>
               </div>
             ) : (
               <div className="scene-grid" role="radiogroup" aria-label="Scene">
@@ -510,7 +675,11 @@ export function CreateEvent() {
         <div className="event-card">
           <div className="event-art">
             {poster ? (
-              <div style={{ height: "100%", display: "grid", placeItems: "center", background: "var(--sun-wash)", fontWeight: 800 }}>Your poster</div>
+              posterUrl ? (
+                <img className="poster" src={posterUrl} alt="" />
+              ) : (
+                <div style={{ height: "100%", display: "grid", placeItems: "center", background: "var(--sun-wash)", fontWeight: 800 }}>Your poster</div>
+              )
             ) : (
               <CityArt scene={scene} />
             )}

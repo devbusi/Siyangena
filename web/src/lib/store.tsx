@@ -2,59 +2,40 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { Drop, DropEvent } from "@drop/shared";
 import { api } from "./api";
 
-export type Persona = "thandi" | "sipho" | "promoter";
-
+// Live feed and the list of events, shared by every screen.
 interface AppState {
-  persona: Persona;
-  setPersona: (p: Persona) => void;
-  fanId: string;
   events: DropEvent[];
-  drop: Drop | null;
-  refreshDrop: () => Promise<void>;
+  drops: Drop[];
+  refreshDrops: () => Promise<void>;
   tick: number;
 }
 
 const Ctx = createContext<AppState | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [persona, setPersona] = useState<Persona>(() => (localStorageGet("persona") as Persona) || "thandi");
   const [events, setEvents] = useState<DropEvent[]>([]);
-  const [drop, setDrop] = useState<Drop | null>(null);
+  const [drops, setDrops] = useState<Drop[]>([]);
   const [tick, setTick] = useState(0);
 
-  const refreshDrop = useCallback(async () => {
+  const refreshDrops = useCallback(async () => {
     try {
-      setDrop(await api.getDrop());
+      setDrops(await api.listEvents());
     } catch {
-      setDrop(null);
+      /* keep the last list */
     }
   }, []);
 
   useEffect(() => {
-    refreshDrop();
+    refreshDrops();
     // One stream for the whole app. Every event also nudges screens to refetch.
     return api.subscribe((event) => {
-      setEvents((prev) => [...prev.slice(-199), event]);
+      setEvents((prev) => [...prev.slice(-299), event]);
       setTick((t) => t + 1);
-      refreshDrop();
+      if (event.type.startsWith("drop.") || event.type === "sale.ticket_sent") refreshDrops();
     });
-  }, [refreshDrop]);
+  }, [refreshDrops]);
 
-  const value = useMemo<AppState>(
-    () => ({
-      persona,
-      setPersona: (p) => {
-        localStorageSet("persona", p);
-        setPersona(p);
-      },
-      fanId: persona === "promoter" ? "thandi" : persona,
-      events,
-      drop,
-      refreshDrop,
-      tick,
-    }),
-    [persona, events, drop, refreshDrop, tick],
-  );
+  const value = useMemo<AppState>(() => ({ events, drops, refreshDrops, tick }), [events, drops, refreshDrops, tick]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
@@ -64,18 +45,7 @@ export function useApp(): AppState {
   return ctx;
 }
 
-// Storage can be missing or blocked (private mode, embedded previews): never let it break the app.
-function localStorageGet(key: string): string | null {
-  try {
-    return window.localStorage.getItem(`siyangena.${key}`);
-  } catch {
-    return null;
-  }
-}
-function localStorageSet(key: string, value: string) {
-  try {
-    window.localStorage.setItem(`siyangena.${key}`, value);
-  } catch {
-    /* ignore */
-  }
+export function useDrop(id: string | undefined): Drop | null {
+  const { drops } = useApp();
+  return drops.find((d) => d.id === id) ?? null;
 }
