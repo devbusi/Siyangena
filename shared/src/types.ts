@@ -465,6 +465,9 @@ export interface TicketPass {
   code: string;
   short: string; // the same pass as a code staff can type, e.g. K7Q4-M2PX
   expiresAt: string;
+  held: number; // tickets this wallet holds for the event
+  used: number; // how many of them have already been scanned in
+  lastUsedAt?: string;
 }
 
 export type PayoutStatus = "requested" | "paid";

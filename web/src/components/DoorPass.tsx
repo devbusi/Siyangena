@@ -9,6 +9,7 @@ import { Button } from "./ui";
 export function DoorPass({ eventId, name, onClose }: { eventId: string; name: string; onClose: () => void }) {
   const [img, setImg] = useState("");
   const [short, setShort] = useState("");
+  const [usage, setUsage] = useState<{ held: number; used: number; lastUsedAt?: string } | null>(null);
   const [error, setError] = useState("");
   const [left, setLeft] = useState(0);
 
@@ -23,6 +24,7 @@ export function DoorPass({ eventId, name, onClose }: { eventId: string; name: st
         if (!stop) {
           setImg(url);
           setShort(pass.short);
+          setUsage({ held: pass.held, used: pass.used, lastUsedAt: pass.lastUsedAt });
           setError("");
         }
       } catch (e) {
@@ -53,7 +55,13 @@ export function DoorPass({ eventId, name, onClose }: { eventId: string; name: st
         style={{ alignItems: "center", textAlign: "center", gap: 12 }}
       >
         <h2>{name}</h2>
-        <p className="muted">Show this at the door. Turn your screen brightness up.</p>
+        <p className="muted">Show this at the door. Turn your screen brightness up. Opening it doesn't use a ticket; only the door scanner does.</p>
+        {usage && usage.used > 0 && (
+          <p className="callout" style={{ fontWeight: 700 }}>
+            {usage.used >= usage.held ? `All ${usage.held} ${usage.held === 1 ? "ticket has" : "tickets have"} been scanned in` : `${usage.used} of ${usage.held} tickets scanned in`}
+            {usage.lastUsedAt ? `, last at ${new Date(usage.lastUsedAt).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}.` : "."}
+          </p>
+        )}
         <div style={{ width: "min(78vw, 300px)", aspectRatio: "1", border: "3px solid #000", borderRadius: 22, background: "#fff", display: "grid", placeItems: "center", overflow: "hidden" }}>
           {img ? <img src={img} alt="Ticket QR code" style={{ width: "92%", height: "92%" }} /> : <p className="muted">{error || "Loading"}</p>}
         </div>

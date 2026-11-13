@@ -395,7 +395,9 @@ export const mockApi: Api = {
     const code = `S1.${eventId}.${who().id}.${exp}.${"m".repeat(22)}`;
     const short = Math.random().toString(36).slice(2, 10).toUpperCase().replace(/(.{4})/, "$1-");
     mockShort[short] = code;
-    return { code, short, expiresAt: new Date(exp).toISOString() };
+    const held = acct(who().id).tickets[eventId] ?? 0;
+    const used = checkins[eventId]?.[who().id] ?? 0;
+    return { code, short, expiresAt: new Date(exp).toISOString(), held, used };
   },
   myEvents: async () => {
     const u = who();

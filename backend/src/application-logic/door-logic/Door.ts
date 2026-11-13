@@ -60,7 +60,15 @@ export class Door {
     let short = makeShort();
     while (shortCodes.has(short)) short = makeShort();
     shortCodes.set(short, { code, exp });
-    return { code, short, expiresAt: new Date(exp).toISOString() };
+    const used = (state.checkins[drop.id] ?? []).filter((c) => c.address === ctx.agent.address);
+    return {
+      code,
+      short,
+      expiresAt: new Date(exp).toISOString(),
+      held,
+      used: used.length,
+      ...(used.length ? { lastUsedAt: used[used.length - 1].at } : {}),
+    };
   }
 
   private turnAway(eventId: string, result: CheckinResult): CheckinResult {
