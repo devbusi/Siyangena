@@ -1535,12 +1535,13 @@ input[type="range"] {
   right: 0;
   top: calc(100% + 10px);
   z-index: 30;
-  width: 260px;
+  width: min(280px, calc(100vw - 24px));
   background: #fff;
   border: 3px solid #000;
   border-radius: 22px;
   padding: 10px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
   transform-origin: top right;
 }
@@ -1550,8 +1551,17 @@ input[type="range"] {
   align-items: center;
   gap: 8px;
   padding: 6px 8px 10px;
+  flex-wrap: wrap;
   border-bottom: 2.5px dashed #000;
   margin-bottom: 4px;
+}
+.plus-head strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.plus-head .pill {
+  flex: none;
+  white-space: nowrap;
 }
 .plus-item {
   display: block;
