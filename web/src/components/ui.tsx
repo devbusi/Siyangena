@@ -240,7 +240,6 @@ export function navFor(role: string | undefined, signedIn: boolean): NavItem[] {
   return [
     { to: "/", label: "Home", end: true },
     { to: "/events", label: "Events", end: true },
-    { to: "/signin", label: "Sign in" },
   ];
 }
 
