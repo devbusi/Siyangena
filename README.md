@@ -2,6 +2,8 @@
 
 Event tickets that can't be scalped or faked. Buy tickets yourself, or set your limits and let an AI agent buy them the moment sales open. Built on the XRP Ledger for the W3Node Node Engine hackathon (Agentic Finance track).
 
+**Live app:** https://siyangena-one.vercel.app
+
 ## The problem
 
 **For people buying tickets:** the events you want sell out in minutes, often before you even hear they're on. By the time you're in the queue, it's gone, and what's left is resold at two or three times the price or turns out to be fake.
@@ -42,7 +44,7 @@ Event tickets that can't be scalped or faked. Buy tickets yourself, or set your 
 
 ## Try it
 
-Three test accounts, all with the password `Siyangena-Test-2026`:
+Open https://siyangena-one.vercel.app and sign in with one of three test accounts, all with the password `Siyangena-Test-2026`:
 
 | Role | Email |
 | --- | --- |
@@ -51,6 +53,8 @@ Three test accounts, all with the password `Siyangena-Test-2026`:
 | Admin | testadmin@siyangena.test |
 
 Test card: `4242 4242 4242 4242` (any expiry and CVC).
+
+The backend runs on Render's free plan, so the first page can take up to a minute to load while it wakes up.
 
 ## Run it locally
 
