@@ -4,15 +4,17 @@ Event tickets that can't be scalped or faked. Buy tickets yourself, or set your 
 
 ## The problem
 
-In South Africa, bots buy out events in seconds and resell tickets at two or three times the price. People lose money to fake tickets and screenshots, and promoters earn nothing from resale.
+**For people buying tickets:** the events you want sell out in minutes, often before you even hear they're on. By the time you're in the queue, it's gone, and what's left is resold at two or three times the price or turns out to be fake.
+
+**For promoters:** once tickets leave their hands, they have no control. Touts resell them at whatever they like, scammers sell fakes and screenshots in their name, and the promoter earns nothing from any of it.
 
 ## How it works
 
-1. **Verify once.** Each person gets one verified wallet, so bots can't hold tickets.
-2. **Buy, or send an agent in.** Buy tickets directly, or give an agent a limit (how many, and the most per ticket). Only you can change the limit.
-3. **Tickets live on the ledger.** Each event is its own token. Only verified wallets can hold it, and it can't be sent person to person.
-4. **Resell fairly.** Can't go? Resell through Siyangena at or under the promoter's cap. Ticket and money swap in one step.
-5. **Get in at the door.** Your ticket shows a code that changes every minute. The promoter scans it, and each ticket lets one person in.
+1. **Never miss it.** Add who you want to see to your wishlist. You get an alert the moment a match is listed and again when sales open.
+2. **Get in first.** Buy directly, or send an agent in with your limit (how many, and the most per ticket). It buys the second sales open. Only you can change the limit.
+3. **Verify once.** Each person gets one verified wallet, so bots and touts can't hold tickets.
+4. **Promoters stay in control.** Each event is its own token on the ledger. Only verified wallets can hold it, it can't be sold off the platform, and resale only happens through Siyangena at or under the promoter's cap, with a fee for the promoter.
+5. **Real tickets at the door.** Your ticket shows a code that changes every minute. The promoter scans it, and each ticket lets one person in.
 
 ## What the ledger guarantees
 
