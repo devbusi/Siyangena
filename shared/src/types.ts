@@ -1,4 +1,4 @@
-// API contract from docs/PLAN.md section 6.
+// Types shared by the backend, the agent and the web app: the API contract.
 // Money fields are strings. `zar` is display, `rlusd` is what settles
 // (on Devnet the settle asset is XRP, but the field names stay the same).
 //

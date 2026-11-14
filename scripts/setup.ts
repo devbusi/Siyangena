@@ -21,7 +21,7 @@ dotenv.config({ path: ENV_PATH, quiet: true });
 const shared = require("@drop/shared") as typeof import("@drop/shared");
 const { ACTIVE, DROP_DEFAULTS, RLUSD_CURRENCY_HEX, explorerTxUrl } = shared;
 
-// Allowance per agent wallet, in Rand (docs/PLAN.md section 2).
+// Allowance per demo agent wallet, in Rand.
 const ALLOWANCE_ZAR: Record<string, number> = {
   THANDI_AGENT_SEED: 3000,
   SIPHO_AGENT_SEED: 1500,

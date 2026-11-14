@@ -1,4 +1,4 @@
-// The four demo moments from docs/PLAN.md section 3, end to end, with explorer links.
+// The four demo moments, end to end, with explorer links.
 // Run after: npm run setup, then npm run dev (backend) in another terminal.
 //   npm run demo
 // To run it again from scratch: empty ISSUANCE_ID in .env, delete backend/data.json,

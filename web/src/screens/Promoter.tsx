@@ -896,7 +896,6 @@ export function PromoterOnboard() {
   const navigate = useNavigate();
   const { me, refresh } = useAuth();
   const [kind, setKind] = useState<"business" | "independent">(me?.application?.kind ?? "business");
-  const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -911,17 +910,6 @@ export function PromoterOnboard() {
       <div className="desk-form" style={{ marginTop: 8 }}>
       <div>
 
-      {sent ? (
-        <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="stack" style={{ marginTop: 22 }}>
-          <div className="callout callout-ok stack" style={{ gap: 6 }}>
-            <strong>{kind === "business" ? "You're verified" : "We're reviewing your events"}</strong>
-            <p>{kind === "business" ? "Your business checks out. You can create your first event now." : "A person on our team looks at your track record, usually within a day. You can set up your event while you wait."}</p>
-          </div>
-          <Button block onClick={() => navigate("/promoter/create")}>
-            Create an event
-          </Button>
-        </motion.div>
-      ) : (
         <Enter delay={0.06}>
           <form
             className="stack"
@@ -1002,7 +990,6 @@ export function PromoterOnboard() {
             </Button>
           </form>
         </Enter>
-      )}
       </div>
       <aside className="desk-aside stack">
         <div className="panel stack" style={{ gap: 10, background: "var(--sun)" }}>

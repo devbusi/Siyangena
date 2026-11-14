@@ -29,7 +29,7 @@ const dropService = new Drop();
 const door = new Door();
 const money = new Money();
 
-router.use((req, res, next) => {
+router.use((_req, res, next) => {
   if (!supabaseConfigured()) {
     return res.status(503).json({ success: false, code: "INTERNAL_ERROR", message: "Accounts are off: Supabase is not configured on the server" });
   }

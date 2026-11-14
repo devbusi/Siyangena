@@ -14,7 +14,7 @@ import { settleAmount, ticketAmount } from "./xrpl.amounts";
 import { xrplExplorer } from "./xrpl.explorer";
 import { SubmitResult } from "./xrpl.types";
 
-// Atomic resale (docs/PLAN.md section 4). Outer Account = promoter, tfAllOrNothing,
+// Atomic resale. Outer Account = promoter, tfAllOrNothing,
 // BatchSigners = seller and buyer. Inner order matters: ticket back to the promoter
 // first, so supply is free even when the drop is sold out.
 export const INNER_DESCRIPTIONS = [

@@ -1,7 +1,7 @@
 // One switch for the whole project. Set XRPL_NETWORK=testnet or devnet in .env.
 //
-// Rule from docs/PLAN.md: if Testnet has BatchV1_1 enabled, use Testnet + RLUSD.
-// Otherwise use Devnet + XRP (RLUSD does not exist on Devnet).
+// Testnet settles in RLUSD (or XRP with SETTLE_ASSET=XRP).
+// Devnet settles in XRP (RLUSD does not exist on Devnet).
 
 export type NetworkName = "testnet" | "devnet";
 export type SettleAsset = "RLUSD" | "XRP";
@@ -46,7 +46,7 @@ export const CREDENTIAL_TYPE = "DropVerifiedFan";
 // Memo type on every agent payment and promoter refund/ticket send.
 export const MEMO_TYPE = "drop";
 
-// Demo drop from docs/PLAN.md section 2.
+// The demo event that setup.ts issues tickets for.
 export const DROP_DEFAULTS = {
   name: "Sunset Sessions Live",
   venue: "Long Street, Cape Town",

@@ -14,7 +14,7 @@ import { xrplExplorer } from "../../xrpl/xrpl.explorer";
 import { xrplConfig } from "../../xrpl/xrpl.config";
 import { accounts } from "../account-logic/Accounts";
 
-// Demo cast from docs/PLAN.md section 2, with seeds in .env. Each has an agent wallet
+// Demo cast for the scripted demo, with seeds in .env. Each has an agent wallet
 // that holds the Credential, the tickets and the allowance.
 // Real accounts (Supabase users) work the same way with one server-held wallet each.
 const CAST = [
