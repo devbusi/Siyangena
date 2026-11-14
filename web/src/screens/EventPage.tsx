@@ -39,6 +39,7 @@ export function EventPage() {
   const [hasAgent, setHasAgent] = useState(false);
 
   const soldOut = drop?.state === "sold_out";
+  const salesClosed = drop?.state === "closed" || (drop ? Date.parse(drop.startsAt) <= Date.now() && drop.state !== "cancelled" : false);
   // If this fan already set up an agent here, the button takes them to it instead of starting over.
   useEffect(() => {
     if (!id || !signedIn || me?.role !== "fan") return;
@@ -87,7 +88,7 @@ export function EventPage() {
         <TopBar back="/events" />
         <Ticker
           items={[
-            drop.state === "open" ? "Tickets on sale now" : soldOut ? "Sold out: fair resale only" : "Tickets on sale soon",
+            salesClosed ? "Sales are closed" : drop.state === "open" ? "Tickets on sale now" : soldOut ? "Sold out: fair resale only" : "Tickets on sale soon",
             "Verified ticket holders only",
             `Resale capped at ${rand(drop.resaleCapZar)}`,
             "No fakes, no scalpers",
@@ -206,9 +207,14 @@ export function EventPage() {
               </Button>
             )}
           </div>
+        ) : salesClosed ? (
+          <div className="bottom-bar-inner stack panel" style={{ gap: 8 }}>
+            <p style={{ fontWeight: 800 }}>Sales for this event are closed.</p>
+            <p className="muted">Already have a ticket? It's in Tickets, ready for the door.</p>
+          </div>
         ) : (
         <div className="bottom-bar-inner stack" style={{ gap: 8 }}>
-          {!soldOut && drop.state !== "closed" && (
+          {!soldOut && (
             <Button block onClick={() => go(`/events/${drop.id}/buy`)}>
               {drop.state === "open" ? "Buy tickets" : "Buy when sales open"}
             </Button>

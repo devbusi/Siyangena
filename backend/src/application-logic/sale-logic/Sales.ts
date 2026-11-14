@@ -48,6 +48,7 @@ export class Sales {
 
     if (drop.state === "sold_out") throw conflict("SOLD_OUT", "This event is sold out");
     if (drop.state !== "open") throw conflict("NOT_OPEN", `Sales are ${drop.state === "scheduled" ? "not open yet" : drop.state}`);
+    if (Date.parse(drop.startsAt) <= Date.now()) throw conflict("NOT_OPEN", "This event has already started, so sales are closed");
     // A promoter can buy other promoters' tickets, never their own: that would be scalping their own show.
     if (drop.promoterId && drop.promoterId === fanId) throw forbidden("UNAUTHORIZED", "You can't buy tickets to your own event");
 
@@ -239,6 +240,8 @@ export class Sales {
     }
 
     const drop = dropService.getRecord(intent.eventId);
+    // A payment that lands after sales closed (or the event was cancelled) is sent straight back.
+    if (drop.state === "closed" || drop.state === "cancelled") return refund(`sales are ${drop.state}`, intent.requestId);
     if (drop.sold + intent.quantity > drop.supply) return refund("sold out", intent.requestId);
 
     intent.status = "paid";
