@@ -96,9 +96,8 @@ export function PromoterDesk() {
       {!drop ? (
         <Enter>
           <div className="stack" style={{ maxWidth: 520, margin: "40px auto", textAlign: "center" }}>
-            <h1>Your first event</h1>
-            <p className="muted">Get verified, then create an event. Agents buy within each person's limits and resale stays at your price.</p>
-            <Button onClick={() => navigate("/promoter/onboard")}>Get verified</Button>
+            <p className="muted">Loading your event</p>
+            <Button variant="ghost" onClick={() => navigate("/promoter/events")}>Back to my events</Button>
           </div>
         </Enter>
       ) : (
