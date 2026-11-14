@@ -8,6 +8,11 @@
 //   npm run test-clean             deletes every other account, all events and the saved app
 //                                  state, then creates the three accounts fresh. Stop the
 //                                  backend first, and start it again after.
+//   npx tsx scripts/test-accounts.ts --fresh --yes
+//                                  everything --clean does, and the ticket holder and promoter
+//                                  start brand new: no wallet, not verified, no promoter
+//                                  application. Use it to film sign-in and onboarding. Suspend
+//                                  the backend on Render first and resume it after.
 //
 // Accounts (same test password for all three):
 //   testuser@siyangena.test       ticket holder
@@ -46,7 +51,7 @@ const ok = (msg: string) => console.log(`  ok    ${msg}`);
 const step = (msg: string) => console.log(`\n${msg}`);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function ensureAccounts(): Promise<Record<Key, string>> {
+async function ensureAccounts(approvePromoter = true): Promise<Record<Key, string>> {
   const db = admin();
   const ids = {} as Record<Key, string>;
   const { data: list, error: listError } = await db.auth.admin.listUsers({ perPage: 1000 });
@@ -71,6 +76,7 @@ async function ensureAccounts(): Promise<Record<Key, string>> {
       .upsert({ id: ids[p.key], email: p.email, full_name: p.fullName, phone: p.phone, role: p.role }, { onConflict: "id" });
     if (profileError) throw new Error(`Couldn't set up the profile for ${p.email}: ${profileError.message}`);
   }
+  if (!approvePromoter) return ids;
   // The promoter is approved straight away, as a registered business so payouts go out as tickets sell.
   const { error: appError } = await db.from("promoter_applications").upsert(
     {
@@ -227,6 +233,20 @@ async function clean() {
   ok("app state cleared (wishes, alerts, payouts, history start fresh)");
 }
 
+// Back to day one for the ticket holder and promoter, so onboarding can be filmed. The logins
+// stay the same; the admin is untouched.
+async function fresh(ids: Record<Key, string>) {
+  const db = admin();
+  const { error: e1 } = await db.from("wallets").delete().eq("user_id", ids.user);
+  if (e1) throw new Error(`Couldn't remove the ticket holder's wallet: ${e1.message}`);
+  const { error: e2 } = await db.from("profiles").update({ verified: false, wallet_address: null }).eq("id", ids.user);
+  if (e2) throw new Error(`Couldn't reset the ticket holder: ${e2.message}`);
+  ok("testuser: no wallet, not verified (onboarding starts at wallet setup)");
+  const { error: e3 } = await db.from("promoter_applications").delete().eq("user_id", ids.promoter);
+  if (e3) throw new Error(`Couldn't remove the promoter application: ${e3.message}`);
+  ok("testpromoter: no application yet (onboarding starts at the promoter form)");
+}
+
 // Send everything but the ledger reserve from the test wallets back to the test bank.
 async function resetMoney(ids: Record<Key, string>) {
   const bankSeed = process.env.BANK_SEED;
@@ -259,6 +279,24 @@ async function resetMoney(ids: Record<Key, string>) {
 }
 
 async function main() {
+  if (process.argv.includes("--fresh")) {
+    if (!process.argv.includes("--yes")) {
+      console.log("This deletes every other account, every event and all saved app data, and makes the");
+      console.log("ticket holder and promoter brand new. Suspend the backend on Render first. Then run:");
+      console.log("npx tsx scripts/test-accounts.ts --fresh --yes");
+      return;
+    }
+    await clean();
+    step("Test accounts");
+    const ids = await ensureAccounts(false);
+    step("Emptying the test wallets back to R0");
+    await resetMoney(ids);
+    step("Starting the ticket holder and promoter from scratch");
+    await fresh(ids);
+    console.log(`\n  Password for all three: ${TEST_PASSWORD}`);
+    console.log("  Now resume the backend on Render, then sign out and back in on every screen.");
+    return;
+  }
   if (process.argv.includes("--clean")) {
     if (!process.argv.includes("--yes")) {
       console.log("This deletes every account except the three test ones, every event and all saved app data.");
