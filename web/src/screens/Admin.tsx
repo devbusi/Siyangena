@@ -17,7 +17,7 @@ const TABS: { id: ApplicationStatus; label: string }[] = [
 
 // Siyangena admins review every promoter before their events can go on sale.
 // Events waiting for a check before they can go on sale.
-function EventReviews() {
+function EventReviews({ onChange }: { onChange: () => void }) {
   const [list, setList] = useState<Drop[] | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
@@ -32,6 +32,7 @@ function EventReviews() {
     try {
       await api.reviewEvent(id, decision, notes[id]);
       load();
+      onChange();
     } catch (e) {
       setError(e instanceof Error ? e.message : "That didn't save");
     } finally {
@@ -105,7 +106,7 @@ function EventReviews() {
 }
 
 // Promoters changing their public name, registration number or bank account.
-function ChangeReviews() {
+function ChangeReviews({ onChange }: { onChange: () => void }) {
   const [list, setList] = useState<ChangeRequest[] | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -119,6 +120,7 @@ function ChangeReviews() {
     try {
       await api.reviewChange(userId, decision);
       load();
+      onChange();
     } catch (e) {
       setError(e instanceof Error ? e.message : "That didn't save");
     } finally {
@@ -185,6 +187,17 @@ export function AdminReview() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [counts, setCounts] = useState({ promoters: 0, events: 0, changes: 0 });
+
+  // How many are waiting in each list, shown as a small number on its tab.
+  const loadCounts = () => {
+    Promise.all([
+      api.applications("pending").then((l) => l.length).catch(() => 0),
+      api.eventsInReview().then((l) => l.filter((d) => d.review?.status === "pending").length).catch(() => 0),
+      api.changeRequests().then((l) => l.length).catch(() => 0),
+    ]).then(([promoters, events, changes]) => setCounts({ promoters, events, changes }));
+  };
+  useEffect(loadCounts, []);
 
   const load = () => {
     api.applications(tab).then(setApps).catch((e) => setError(e instanceof Error ? e.message : "Couldn't load applications"));
@@ -197,6 +210,7 @@ export function AdminReview() {
     try {
       await api.review(userId, decision, notes[userId]);
       load();
+      loadCounts();
     } catch (e) {
       setError(e instanceof Error ? e.message : "That didn't save");
     } finally {
@@ -219,8 +233,13 @@ export function AdminReview() {
               ["changes", "Detail changes"],
             ] as const
           ).map(([id, label]) => (
-            <button key={id} type="button" className="chip" aria-pressed={what === id} onClick={() => setWhat(id)}>
+            <button key={id} type="button" className="chip chip-count" aria-pressed={what === id} onClick={() => setWhat(id)}>
               {label}
+              {counts[id] > 0 && (
+                <span className="chip-badge" aria-label={`${counts[id]} waiting`}>
+                  {counts[id]}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -234,8 +253,8 @@ export function AdminReview() {
         </div>
         )}
       </Enter>
-      {what === "events" && <EventReviews />}
-      {what === "changes" && <ChangeReviews />}
+      {what === "events" && <EventReviews onChange={loadCounts} />}
+      {what === "changes" && <ChangeReviews onChange={loadCounts} />}
       {what === "promoters" && error && (
         <p role="alert" className="callout callout-blocked" style={{ marginTop: 14 }}>
           {error}
