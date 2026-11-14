@@ -48,8 +48,8 @@ export const MEMO_TYPE = "drop";
 
 // Demo drop from docs/PLAN.md section 2.
 export const DROP_DEFAULTS = {
-  name: "Drop Live: Cape Town",
-  venue: "Grand Arena, Cape Town",
+  name: "Sunset Sessions Live",
+  venue: "Long Street, Cape Town",
   startsAt: "2026-12-12T19:00:00+02:00",
   priceZar: 1200,
   supply: 3,
@@ -73,11 +73,18 @@ function pickNetwork(): NetworkName {
 
 const base = NETWORKS[pickNetwork()];
 
+// SETTLE_ASSET=XRP pays in test XRP on Testnet too, for when the RLUSD faucet is not paying out.
+// Accounts, events and tickets stay the same; only the money changes.
+const payInXrp = base.settleAsset === "XRP" || (env.SETTLE_ASSET || "").toUpperCase() === "XRP";
+
 export const ACTIVE = {
   ...base,
+  settleAsset: (payInXrp ? "XRP" : "RLUSD") as SettleAsset,
   wss: env.XRPL_WSS || base.wss,
   rlusdIssuer: env.RLUSD_ISSUER || RLUSD_TESTNET_ISSUER,
-  fxZarPerUnit: Number(env.FX_ZAR_PER_RLUSD) || base.defaultFxZarPerUnit,
+  fxZarPerUnit: payInXrp
+    ? Number(env.FX_ZAR_PER_XRP) || NETWORKS.devnet.defaultFxZarPerUnit
+    : Number(env.FX_ZAR_PER_RLUSD) || base.defaultFxZarPerUnit,
 };
 
 export function explorerTxUrl(hash: string): string {

@@ -3,16 +3,18 @@ import { Sales } from "../../../application-logic/sale-logic/Sales";
 import { SaleIntentDto } from "../../../dto/sale.dto";
 import { validate } from "../../../middleware/validate";
 import { sendError } from "../../../lib/utils/errors";
+import { requireFanAccess } from "../../../middleware/auth";
+import { eventIdFrom } from "../../../lib/utils/eventId";
 
 const router = Router();
 const saleService = new Sales();
 
 // POST /api/sales/intents: checks mandate, per-fan limit, supply. The agent then pays
 // `payTo` itself with the returned memo; the sale watcher sends tickets or refunds.
-router.post("/intents", validate(SaleIntentDto), async (req: Request, res: Response) => {
+router.post("/intents", validate(SaleIntentDto), requireFanAccess("body"), async (req: Request, res: Response) => {
   try {
     const { fanId, quantity } = req.body as SaleIntentDto;
-    const intent = await saleService.createIntent(fanId, quantity);
+    const intent = await saleService.createIntent(fanId, quantity, eventIdFrom(req));
     res.status(201).json({ success: true, data: intent });
   } catch (error) {
     sendError(res, error, "Failed to create sale intent");

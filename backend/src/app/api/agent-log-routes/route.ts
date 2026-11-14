@@ -3,13 +3,15 @@ import { AgentLog } from "../../../application-logic/agent-log-logic/AgentLog";
 import { AgentLogDto } from "../../../dto/agent-log.dto";
 import { validate } from "../../../middleware/validate";
 import { sendError } from "../../../lib/utils/errors";
+import { requireFanAccess } from "../../../middleware/auth";
+import { eventIdFrom } from "../../../lib/utils/eventId";
 
 const router = Router();
 const agentLogService = new AgentLog();
 
-router.post("/", validate(AgentLogDto), async (req: Request, res: Response) => {
+router.post("/", validate(AgentLogDto), requireFanAccess("body"), async (req: Request, res: Response) => {
   try {
-    const entry = agentLogService.addEntry(req.body as AgentLogDto);
+    const entry = agentLogService.addEntry(req.body as AgentLogDto, eventIdFrom(req));
     res.status(201).json({ success: true, data: entry });
   } catch (error) {
     sendError(res, error, "Failed to write agent log");

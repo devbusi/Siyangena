@@ -29,7 +29,8 @@ export class Events {
     return () => bus.off("event", listener);
   }
 
-  recent(limit = 50): DropEvent[] {
-    return state.events.slice(-limit);
+  recent(limit = 50, eventId?: string): DropEvent[] {
+    const list = eventId ? state.events.filter((e) => !e.eventId || e.eventId === eventId) : state.events;
+    return list.slice(-limit);
   }
 }

@@ -8,7 +8,7 @@ const events = new Events();
 
 // What the agent did and why, for the live view.
 export class AgentLog {
-  addEntry(params: { fanId: string; mandateId: string; tool: string; reason: string; txHash?: string }): AgentLogEntry {
+  addEntry(params: { fanId: string; mandateId: string; tool: string; reason: string; txHash?: string }, eventId?: string): AgentLogEntry {
     const entry: AgentLogEntry = {
       id: newId("log"),
       at: nowIso(),
@@ -19,7 +19,10 @@ export class AgentLog {
     save();
     events.emit("agent.action", `${params.fanId}'s agent: ${params.tool}: ${params.reason}`, {
       fanId: params.fanId,
+      ...(eventId ? { eventId } : {}),
       txHash: params.txHash,
+      detail: params.reason,
+      tool: params.tool,
     });
     return entry;
   }

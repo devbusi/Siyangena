@@ -1,0 +1,33 @@
+{
+  "name": "@drop/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Siyangena web app: fan journey and promoter control room.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:mock": "VITE_MOCK=1 vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@drop/shared": "*",
+    "@fontsource-variable/archivo": "^5.3.0",
+    "@supabase/supabase-js": "^2.119.0",
+    "jsqr": "^1.4.0",
+    "motion": "^12.23.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.9.0"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.0"
+  }
+}

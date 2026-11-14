@@ -1,5 +1,5 @@
 import { GlobalFlags } from "xrpl";
-import { SALE_INTENT_TTL_MS, decodeDropMemo, type SaleIntent } from "@drop/shared";
+import { SALE_INTENT_TTL_MS, decodeDropMemo, encodeDropMemo, type SaleIntent } from "@drop/shared";
 import { state, save, IntentRecord } from "../../lib/store";
 import { conflict, forbidden } from "../../lib/utils/errors";
 import { newId, nowIso } from "../../lib/utils/ids";
@@ -9,11 +9,12 @@ import { xrplConfig } from "../../xrpl/xrpl.config";
 import { xrplWallet } from "../../xrpl/xrpl.wallet";
 import { xrplMpt } from "../../xrpl/xrpl.mpt";
 import { xrplPayments } from "../../xrpl/xrpl.payments";
-import { readSettleAmount } from "../../xrpl/xrpl.amounts";
+import { readSettleAmount, settleAmount } from "../../xrpl/xrpl.amounts";
 import { Drop } from "../drop-logic/Drop";
 import { Fans } from "../fan-logic/Fans";
 import { Mandates } from "../mandate-logic/Mandates";
 import { Events } from "../event-logic/Events";
+import { notify, ticketsLink } from "../../lib/sms";
 
 const dropService = new Drop();
 const fanService = new Fans();
@@ -40,24 +41,30 @@ export class Sales {
 
   // Step 1 of a primary purchase. Every service rule is checked here; the agent then
   // submits the Payment itself with the returned memo.
-  async createIntent(fanId: string, quantity: number): Promise<SaleIntent> {
-    const drop = dropService.getRecord();
+  // Buying directly in the app (manual) skips the agent's limits: the human is choosing.
+  async createIntent(fanId: string, quantity: number, eventId?: string, opts: { manual?: boolean } = {}): Promise<SaleIntent> {
+    const drop = dropService.getRecord(eventId);
     fanService.getContext(fanId);
 
-    if (drop.state === "sold_out") throw conflict("SOLD_OUT", "Drop is sold out");
-    if (drop.state !== "open") throw conflict("NOT_OPEN", `Drop is ${drop.state}`);
+    if (drop.state === "sold_out") throw conflict("SOLD_OUT", "This event is sold out");
+    if (drop.state !== "open") throw conflict("NOT_OPEN", `Sales are ${drop.state === "scheduled" ? "not open yet" : drop.state}`);
+    // A promoter can buy other promoters' tickets, never their own: that would be scalping their own show.
+    if (drop.promoterId && drop.promoterId === fanId) throw forbidden("UNAUTHORIZED", "You can't buy tickets to your own event");
 
     fanService.assertVerified(fanId);
-    const mandate = mandateService.assertWithinMandate(fanId, quantity, drop.priceZar);
+    const mandateId = opts.manual ? "manual" : mandateService.assertWithinMandate(fanId, quantity, drop.priceZar, drop.id).id;
 
-    const pending = this.pending();
+    const pending = this.pending().filter((i) => i.eventId === drop.id);
     const fanPending = pending.filter((i) => i.fanId === fanId).reduce((n, i) => n + i.quantity, 0);
-    const held = await fanService.getTicketCount(fanId);
+    const held = await fanService.getTicketCount(fanId, drop.id);
     if (held + fanPending + quantity > drop.maxPerFan) {
-      const message = `${fanId}: max ${drop.maxPerFan} per fan (holds ${held}, pending ${fanPending}, asked ${quantity})`;
-      events.emit("mandate.blocked", message, { fanId });
+      const message = `${fanId}: max ${drop.maxPerFan} per person (holds ${held}, pending ${fanPending}, asked ${quantity})`;
+      events.emit("mandate.blocked", message, { fanId, eventId: drop.id });
       throw forbidden("LIMIT_PER_FAN", message);
     }
+
+    // The wallet must be allowed to hold this event's tickets before the promoter sends them.
+    await fanService.ensureEventAccess(fanId, drop.id);
 
     const reserved = pending.reduce((n, i) => n + i.quantity, 0);
     if (drop.sold + reserved + quantity > drop.supply) {
@@ -66,8 +73,9 @@ export class Sales {
 
     const intent: IntentRecord = {
       requestId: newId("req"),
+      eventId: drop.id,
       fanId,
-      mandateId: mandate.id,
+      mandateId,
       quantity,
       amountRlusd: zarToSettle(drop.priceZar * quantity),
       status: "pending",
@@ -79,15 +87,47 @@ export class Sales {
 
     events.emit("sale.intent", `${fanId} asked for ${quantity} ticket(s): pay ${intent.amountRlusd} ${xrplConfig.settleAsset}`, {
       fanId,
+      eventId: drop.id,
     });
 
     return {
       requestId: intent.requestId,
       payTo: xrplWallet.getPromoterWallet().address,
       amountRlusd: intent.amountRlusd,
-      memo: { kind: "sale", requestId: intent.requestId, mandateId: mandate.id },
+      memo: { kind: "sale", requestId: intent.requestId, mandateId },
       expiresAt: intent.expiresAt,
     };
+  }
+
+  // Buy in the app with no agent: the server pays from the fan's own wallet (it holds the
+  // key for real accounts), then the watcher sends the tickets as for any other sale.
+  async buyNow(fanId: string, quantity: number, eventId: string) {
+    const ctx = fanService.getContext(fanId);
+    const intent = await this.createIntent(fanId, quantity, eventId, { manual: true });
+    const balance = Number(await xrplPayments.getSettleBalance(ctx.agent.address));
+    if (balance + 1e-9 < Number(intent.amountRlusd)) {
+      state.intents[intent.requestId].status = "expired";
+      save();
+      throw conflict("INVALID_STATE", "Not enough money in your Siyangena wallet. Top up and try again.");
+    }
+    const paid = await xrplClient.submitTx(ctx.agent, {
+      TransactionType: "Payment",
+      Account: ctx.agent.address,
+      Destination: intent.payTo,
+      Amount: settleAmount(intent.amountRlusd),
+      Memos: encodeDropMemo(intent.memo),
+    });
+    if (paid.result !== "tesSUCCESS") {
+      state.intents[intent.requestId].status = "expired";
+      save();
+      throw conflict("INVALID_STATE", `Payment did not go through (${paid.result})`);
+    }
+    return { requestId: intent.requestId, paymentTx: paid.hash, quantity, eventId };
+  }
+
+  intentStatus(requestId: string) {
+    const intent = state.intents[requestId];
+    return intent ? { status: intent.status, ticketTx: intent.ticketTx, paymentTx: intent.paymentTx } : null;
   }
 
   // ---- Watcher: subscribe to the promoter account, match memo, send tickets or refund ----
@@ -173,6 +213,7 @@ export class Sales {
       save();
       events.emit("sale.refunded", `Refunded ${p.amount} ${xrplConfig.settleAsset} to ${fan?.id ?? p.from}: ${reason}`, {
         fanId: fan?.id,
+        eventId: requestId ? state.intents[requestId]?.eventId : undefined,
         txHash: result.hash,
       });
       if (fan) {
@@ -197,7 +238,7 @@ export class Sales {
       return refund(`expected ${intent.amountRlusd}, got ${p.amount}`, intent.requestId);
     }
 
-    const drop = dropService.getRecord();
+    const drop = dropService.getRecord(intent.eventId);
     if (drop.sold + intent.quantity > drop.supply) return refund("sold out", intent.requestId);
 
     intent.status = "paid";
@@ -205,9 +246,11 @@ export class Sales {
     save();
     events.emit("sale.paid", `${intent.fanId} paid ${p.amount} ${xrplConfig.settleAsset} for ${intent.quantity} ticket(s)`, {
       fanId: intent.fanId,
+      eventId: drop.id,
       txHash: p.hash,
     });
     fanService.addHistory(intent.fanId, {
+      eventId: drop.id,
       kind: "primary_purchase",
       description: `Paid for ${intent.quantity} ticket(s)`,
       tickets: 0,
@@ -216,7 +259,7 @@ export class Sales {
     });
 
     // Reserve supply before the await so concurrent payments can't oversell.
-    dropService.markSold(intent.quantity);
+    dropService.markSold(drop.id, intent.quantity);
     const sent = await xrplMpt.sendTickets({
       to: intentFan.agent.address,
       issuanceId: drop.issuanceId,
@@ -225,9 +268,10 @@ export class Sales {
     });
 
     if (sent.result !== "tesSUCCESS") {
-      dropService.unmarkSold(intent.quantity);
+      dropService.unmarkSold(drop.id, intent.quantity);
       events.emit("ledger.rejected", `Ticket transfer to ${intent.fanId} failed: ${sent.result}`, {
         fanId: intent.fanId,
+        eventId: drop.id,
         txHash: sent.hash,
       });
       intent.status = "pending"; // let refund() mark it refunded
@@ -236,15 +280,23 @@ export class Sales {
 
     intent.status = "fulfilled";
     intent.ticketTx = sent.hash;
-    mandateService.recordPurchase(intent.fanId, intent.quantity);
-    state.stats.revenueRlusd = addAmounts(state.stats.revenueRlusd, p.amount);
+    if (intent.mandateId !== "manual") mandateService.recordPurchase(intent.fanId, intent.quantity, drop.id);
+    const stats = dropService.statsFor(drop.id);
+    stats.revenueRlusd = addAmounts(stats.revenueRlusd, p.amount);
     save();
 
+    const when = new Date(drop.startsAt).toLocaleString("en-ZA", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Johannesburg" });
+    notify(
+      intent.fanId,
+      `Siyangena: your ${intent.quantity === 1 ? "ticket" : `${intent.quantity} tickets`} for ${drop.name} (${drop.venue}, ${when}) ${intent.quantity === 1 ? "is" : "are"} in your wallet. Show ${intent.quantity === 1 ? "it" : "them"} at the door: ${ticketsLink()}`,
+    );
     events.emit("sale.ticket_sent", `Sent ${intent.quantity} ticket(s) to ${intent.fanId}`, {
       fanId: intent.fanId,
+      eventId: drop.id,
       txHash: sent.hash,
     });
     fanService.addHistory(intent.fanId, {
+      eventId: drop.id,
       kind: "ticket_received",
       description: `Received ${intent.quantity} ticket(s) from the promoter`,
       tickets: intent.quantity,

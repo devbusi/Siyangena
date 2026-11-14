@@ -14,8 +14,13 @@ router.get("/", (req: Request, res: Response) => {
   });
   res.flushHeaders();
 
-  const send = (event: unknown) => res.write(`data: ${JSON.stringify(event)}\n\n`);
-  for (const event of eventService.recent(50)) send(event);
+  // Optional ?eventId= keeps the stream to one event (plus global notices).
+  const only = typeof req.query.eventId === "string" ? req.query.eventId : undefined;
+  const send = (event: any) => {
+    if (only && event.eventId && event.eventId !== only) return;
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+  };
+  for (const event of eventService.recent(50, only)) send(event);
 
   const unsubscribe = eventService.subscribe(send);
   const keepAlive = setInterval(() => res.write(": ping\n\n"), 15000);

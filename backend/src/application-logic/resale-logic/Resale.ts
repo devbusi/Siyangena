@@ -1,5 +1,5 @@
 import { BATCH_SIGNING_TTL_MS, type AcceptListingResponse, type Listing, type ResaleBatchView, type SubmitSignatureResponse } from "@drop/shared";
-import { Batch } from "xrpl";
+import { Batch, signMultiBatch } from "xrpl";
 import { state, save, BatchRecord, ListingRecord } from "../../lib/store";
 import { ApiError, badRequest, conflict, forbidden, notFound } from "../../lib/utils/errors";
 import { newId, nowIso } from "../../lib/utils/ids";
@@ -11,6 +11,7 @@ import { Drop } from "../drop-logic/Drop";
 import { Fans } from "../fan-logic/Fans";
 import { Mandates } from "../mandate-logic/Mandates";
 import { Events } from "../event-logic/Events";
+import { notify, ticketsLink } from "../../lib/sms";
 
 const dropService = new Drop();
 const fanService = new Fans();
@@ -38,22 +39,23 @@ export class Resale {
     return batch;
   }
 
-  listListings(): Listing[] {
+  listListings(eventId?: string): Listing[] {
     return Object.values(state.listings)
+      .filter((l) => !eventId || l.eventId === eventId)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .map((l) => this.toView(l));
   }
 
   // The seller's agent lists one ticket. Listings over the cap are accepted here but the
   // promoter refuses to co-sign them, so they can never reach the ledger.
-  async createListing(fanId: string, priceZar: number): Promise<Listing> {
-    const drop = dropService.getRecord();
+  async createListing(fanId: string, priceZar: number, eventId?: string): Promise<Listing> {
+    const drop = dropService.getRecord(eventId);
     fanService.getContext(fanId);
     fanService.assertVerified(fanId);
 
-    const held = await fanService.getTicketCount(fanId);
+    const held = await fanService.getTicketCount(fanId, drop.id);
     const alreadyListed = Object.values(state.listings).filter(
-      (l) => l.sellerFanId === fanId && (l.status === "open" || l.status === "signing"),
+      (l) => l.eventId === drop.id && l.sellerFanId === fanId && (l.status === "open" || l.status === "signing"),
     ).length;
     if (held - alreadyListed < 1) {
       throw forbidden("NO_TICKET", `${fanId} has no unlisted ticket (holds ${held}, listed ${alreadyListed})`);
@@ -62,6 +64,7 @@ export class Resale {
     const fee = (priceZar * drop.resaleFeePct) / 100;
     const listing: ListingRecord = {
       id: newId("listing"),
+      eventId: drop.id,
       sellerFanId: fanId,
       priceZar: zar(priceZar),
       feeZar: zar(fee),
@@ -77,18 +80,19 @@ export class Resale {
       "resale.listed",
       `${fanId} listed a ticket at R${listing.priceZar} (+R${listing.feeZar} fee)` +
         (overCap ? `: over the R${zar(drop.resaleCapZar)} cap, promoter will not co-sign` : ""),
-      { fanId, listingId: listing.id },
+      { fanId, eventId: drop.id, listingId: listing.id },
     );
     return this.toView(listing);
   }
 
   // Buyer's agent accepts. Checks the promoter's cap and the buyer's mandate, then builds
   // the Batch while holding the promoter queue so its Sequence can't go stale.
-  async acceptListing(listingId: string, buyerFanId: string): Promise<AcceptListingResponse> {
-    const drop = dropService.getRecord();
+  async acceptListing(listingId: string, buyerFanId: string, opts: { manual?: boolean } = {}): Promise<AcceptListingResponse> {
     const listing = this.getListingRecord(listingId);
+    const drop = dropService.getRecord(listing.eventId);
     if (listing.status !== "open") throw conflict("INVALID_STATE", `Listing is ${listing.status}`);
     if (listing.sellerFanId === buyerFanId) throw badRequest("INVALID_STATE", "Seller cannot buy their own listing");
+    if (drop.promoterId && drop.promoterId === buyerFanId) throw forbidden("UNAUTHORIZED", "You can't buy tickets to your own event");
 
     const seller = fanService.getContext(listing.sellerFanId);
     const buyer = fanService.getContext(buyerFanId);
@@ -98,18 +102,21 @@ export class Resale {
       listing.status = "refused";
       save();
       const message = `Promoter refused to co-sign: R${listing.priceZar} is over the R${zar(drop.resaleCapZar)} resale cap`;
-      events.emit("resale.refused", message, { fanId: buyerFanId, listingId });
+      events.emit("resale.refused", message, { fanId: buyerFanId, eventId: drop.id, listingId });
       throw forbidden("CAP_EXCEEDED", message);
     }
 
-    mandateService.assertWithinMandate(buyerFanId, 1, Number(listing.totalZar));
+    if (!opts.manual) mandateService.assertWithinMandate(buyerFanId, 1, Number(listing.totalZar), drop.id);
 
-    const buyerHeld = await fanService.getTicketCount(buyerFanId);
+    const buyerHeld = await fanService.getTicketCount(buyerFanId, drop.id);
     if (buyerHeld + 1 > drop.maxPerFan) {
-      const message = `${buyerFanId}: max ${drop.maxPerFan} per fan (holds ${buyerHeld})`;
-      events.emit("mandate.blocked", message, { fanId: buyerFanId });
+      const message = `${buyerFanId}: max ${drop.maxPerFan} per person (holds ${buyerHeld})`;
+      events.emit("mandate.blocked", message, { fanId: buyerFanId, eventId: drop.id });
       throw forbidden("LIMIT_PER_FAN", message);
     }
+
+    // The buyer's wallet must be allowed to hold this event's ticket.
+    await fanService.ensureEventAccess(buyerFanId, drop.id);
 
     // Claim the listing before waiting on the queue so two buyers can't both get it.
     listing.status = "signing";
@@ -137,6 +144,7 @@ export class Resale {
 
     const record: BatchRecord = {
       batchId: newId("batch"),
+      eventId: drop.id,
       listingId,
       sellerFanId: seller.id,
       buyerFanId,
@@ -155,11 +163,36 @@ export class Resale {
 
     events.emit("resale.sign_requested", `${seller.id} and ${buyerFanId} to sign resale Batch for R${listing.totalZar}`, {
       fanId: seller.id,
+      eventId: drop.id,
       listingId,
       batchId: record.batchId,
     });
 
     return { batchId: record.batchId, batch: record.batch };
+  }
+
+  // For real accounts the server holds the wallet, so it signs for them: the seller agreed
+  // by listing, the buyer by accepting. Agents for those accounts may sign too; whichever
+  // signature lands first is used.
+  async signForAccounts(batchId: string): Promise<SubmitSignatureResponse | null> {
+    const record = this.getBatchRecord(batchId);
+    let last: SubmitSignatureResponse | null = null;
+    for (const fanId of [record.sellerFanId, record.buyerFanId]) {
+      const ctx = fanService.findContext(fanId);
+      if (!ctx?.custodial || record.signatures[fanId] || record.status !== "awaiting_signatures") continue;
+      const copy = structuredClone(record.batch) as unknown as Batch;
+      delete (copy as any).BatchSigners;
+      signMultiBatch(ctx.agent, copy);
+      last = await this.submitSignature(batchId, fanId, copy as unknown as Record<string, unknown>);
+    }
+    return last;
+  }
+
+  // Buy a listed ticket in the app, with no agent.
+  async buyListing(listingId: string, buyerFanId: string): Promise<SubmitSignatureResponse> {
+    const accepted = await this.acceptListing(listingId, buyerFanId, { manual: true });
+    const result = await this.signForAccounts(accepted.batchId);
+    return result ?? { status: this.getBatchRecord(accepted.batchId).status };
   }
 
   private finish(batchId: string) {
@@ -208,11 +241,21 @@ export class Resale {
     signedBatch: Record<string, unknown> | string,
   ): Promise<SubmitSignatureResponse> {
     const record = this.getBatchRecord(batchId);
-    if (record.status !== "awaiting_signatures") {
-      throw conflict("INVALID_STATE", `Batch is ${record.status}`);
-    }
     if (fanId !== record.sellerFanId && fanId !== record.buyerFanId) {
       throw forbidden("INVALID_SIGNATURE", `${fanId} is not a party to this Batch`);
+    }
+    // Already signed (for example by the server for a real account): report where it is.
+    if (record.signatures[fanId] || record.status !== "awaiting_signatures") {
+      if (record.status === "awaiting_signatures" || record.status === "settled" || record.status === "submitted") {
+        return {
+          status: record.status,
+          ...(record.status === "awaiting_signatures"
+            ? { waitingFor: [record.sellerFanId, record.buyerFanId].filter((id) => !record.signatures[id]) }
+            : {}),
+          ...(record.txHash ? { txHash: record.txHash, explorerUrl: xrplExplorer.transactionUrl(record.txHash) } : {}),
+        };
+      }
+      throw conflict("INVALID_STATE", `Batch is ${record.status}`);
     }
 
     const signer = fanService.getContext(fanId);
@@ -232,7 +275,7 @@ export class Resale {
     save();
 
     const listing = this.getListingRecord(record.listingId);
-    const drop = dropService.getRecord();
+    const drop = dropService.getRecord(record.eventId);
 
     try {
       // The promoter checks the cap again (it may have been lowered) and signs last.
@@ -281,12 +324,14 @@ export class Resale {
       listing.status = "settled";
       listing.txHash = outer.hash;
       listing.explorerUrl = xrplExplorer.transactionUrl(outer.hash);
-      state.stats.resales += 1;
-      state.stats.feesRlusd = addAmounts(state.stats.feesRlusd, zarToSettle(Number(listing.feeZar)));
+      const stats = dropService.statsFor(drop.id);
+      stats.resales += 1;
+      stats.feesRlusd = addAmounts(stats.feesRlusd, zarToSettle(Number(listing.feeZar)));
       save();
 
-      mandateService.recordPurchase(record.buyerFanId, 1);
+      mandateService.recordPurchase(record.buyerFanId, 1, drop.id);
       fanService.addHistory(record.sellerFanId, {
+        eventId: drop.id,
         kind: "resale_sold",
         description: `Resold 1 ticket to ${record.buyerFanId} for R${listing.priceZar}`,
         tickets: -1,
@@ -294,16 +339,19 @@ export class Resale {
         txHash: outer.hash,
       });
       fanService.addHistory(record.buyerFanId, {
+        eventId: drop.id,
         kind: "resale_bought",
         description: `Bought 1 resale ticket from ${record.sellerFanId} for R${listing.totalZar}`,
         tickets: 1,
         amountRlusd: zarToSettle(Number(listing.totalZar)),
         txHash: outer.hash,
       });
+      notify(record.sellerFanId, `Siyangena: your ${drop.name} ticket sold to a verified ticket holder. R${listing.priceZar} is in your wallet.`);
+      notify(record.buyerFanId, `Siyangena: you got a ${drop.name} ticket at a fair price. It's in your wallet: ${ticketsLink()}`);
       events.emit(
         "resale.settled",
         `${record.sellerFanId} sold to ${record.buyerFanId} in one Batch: R${listing.priceZar} + R${listing.feeZar} fee to promoter`,
-        { listingId: listing.id, batchId, txHash: outer.hash },
+        { eventId: drop.id, listingId: listing.id, batchId, txHash: outer.hash },
       );
 
       return {
